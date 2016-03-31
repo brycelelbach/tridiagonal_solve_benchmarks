@@ -439,7 +439,7 @@ struct heat_equation_btcs
 
         high_resolution_timer t;
 
-        for (int s = 1; s < ns; ++s)
+        for (int s = 0; s < ns; ++s)
         {
             build_matrix();
 
@@ -456,7 +456,7 @@ struct heat_equation_btcs
                 for (int i = 0; i < nx; ++i)
                 {
                     double exact = std::exp( -D * (N * N)
-                                           * (M_PI * M_PI) * (dt * (ns - 1)))
+                                           * (M_PI * M_PI) * (dt * ns))
                                  * std::sin(N * M_PI * (dz * k)); 
 
                     errorp[i] = (up[i] - exact); 
