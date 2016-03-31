@@ -6,9 +6,12 @@
 #include <chrono>
 
 #include <cmath>
+#include <cstring>
 #include <cassert>
+#include <climits>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 
 #include <mkl.h>
 
@@ -45,29 +48,111 @@ struct high_resolution_timer
 };
 
 template <typename T>
+T get_env_variable(std::string const& var, T default_val); 
+
+template <>
+std::uint64_t get_env_variable(std::string const& var, std::uint64_t default_val) 
+{
+    char const* const env_str_p(std::getenv(var.c_str()));
+
+    if (nullptr == env_str_p)
+        return default_val;
+
+    std::string const env_str(env_str_p);
+
+    char* env_str_p_end(nullptr);
+
+    std::uint64_t const r = std::strtoul(env_str.c_str(), &env_str_p_end, 10);
+
+    if ((&env_str.back() != env_str_p_end - 1) || ULONG_MAX == r)
+    {
+        std::cout << "ERROR: invalid value '" << env_str << "' "
+                     "for integer environment variable '" << var << "'"
+                     "\n";
+        std::exit(1);
+    }
+
+    return r;
+}
+
+template <>
+double get_env_variable(std::string const& var, double default_val) 
+{
+    char const* const env_str_p(std::getenv(var.c_str()));
+
+    if (nullptr == env_str_p)
+        return default_val;
+
+    std::string const env_str(env_str_p);
+
+    char* env_str_p_end(nullptr);
+
+    double const r = std::strtod(env_str.c_str(), &env_str_p_end);
+
+    if ((&env_str.back() != env_str_p_end - 1) || ULONG_MAX == r)
+    {
+        std::cout << "ERROR: invalid value '" << env_str << "' "
+                     "for floating point environment variable '" << var << "'"
+                     "\n";
+        std::exit(1);
+    }
+
+    return r;
+}
+
+template <typename T, std::size_t Alignment = 64>
 struct array3d
 {
     typedef std::ptrdiff_t size_type;
     typedef T value_type;
 
   private:
-    std::vector<T> data_;
+    T* data_;
     size_type nx_, ny_, nz_;
 
   public:
     array3d() : data_(), nx_(), ny_(), nz_() {}
 
     array3d(size_type nx, size_type ny, size_type nz)
-      : data_(nx * ny * nz)
-      , nx_(nx), ny_(ny), nz_(nz)
-    {}
+    {
+        resize(nx, ny, nz);
+    }
+
+    ~array3d()
+    {
+        clear();
+    }
 
     void resize(size_type nx, size_type ny, size_type nz)
     {
-        data_.resize(nx * ny * nz);
+        clear();
+
+        void* p = 0; 
+
+        int const r = posix_memalign(&p, Alignment, nx * ny * nz * sizeof(T));
+        assert(0 == r);
+
+        std::memset(p, 0, nx * ny * nz * sizeof(T));
+
+        data_ = reinterpret_cast<double*>(p);
+
         nx_ = nx;
         ny_ = ny;
         nz_ = nz;
+    }
+
+    void clear()
+    {
+        if (data_)
+        {
+            assert(0 != nx_ * ny_ * nz_);
+            free(data_);
+        }
+
+        data_ = 0;
+        nx_ = 0;
+        ny_ = 0;
+        nz_ = 0;
     }
 
     T const& operator()(size_type i, size_type j, size_type k) const noexcept
@@ -86,6 +171,15 @@ struct array3d
     T* operator()(size_type i, size_type j) noexcept
     {
         return &data_[index(i, j)];
+    }
+
+    T* data() const noexcept
+    {
+        return data_;
+    }
+    T* data() noexcept
+    {
+        return data_;
     }
 
     size_type index(size_type i, size_type j, size_type k) const noexcept
@@ -152,13 +246,13 @@ struct heat_equation_btcs
   public:
     heat_equation_btcs()
     {
-        D = 0.1;
-        N = 1.0;
-        nx = 128;
-        ny = 128;
-        nz = 32;
-        ns = 200;
-        nt = 0.002;
+        D  = get_env_variable<double>("D", 0.1);
+        N  = get_env_variable<double>("N", 1.0);
+        nx = get_env_variable<std::uint64_t>("nx", 128);
+        ny = get_env_variable<std::uint64_t>("ny", 128);
+        nz = get_env_variable<std::uint64_t>("nz", 32);
+        ns = get_env_variable<std::uint64_t>("ns", 200);
+        nt = get_env_variable<double>("nt", 0.002);
     }
 
     void initialize()
@@ -171,9 +265,9 @@ struct heat_equation_btcs
         r = D * dt / (dz * dz);
 
         // Allocate storage for the matrix.
-        a.resize(nx, ny, nz - 1);
+        a.resize(nx, ny, nz);
         b.resize(nx, ny, nz);
-        c.resize(nx, ny, nz - 1);
+        c.resize(nx, ny, nz);
 
         // Allocate storage for the problem state and initialize it.
         u.resize(nx, ny, nz);
@@ -226,27 +320,23 @@ struct heat_equation_btcs
         {
             build_matrix();
 
-            for (int i = 0; i < nx; ++i)
-                for (int j = 0; j < ny; ++j)
-                {
-                    int mkl_n    = nz;
-                    int mkl_nrhs = 1;
-                    int mkl_ldb  = nz;
-                    int mkl_info = 0;
+            int mkl_n    = nx*ny*nz;
+            int mkl_nrhs = 1;
+            int mkl_ldb  = nx*ny*nz;
+            int mkl_info = 0;
 
-                    dgtsv_(
-                        &mkl_n,       // matrix order
-                        &mkl_nrhs,    // # of right hand sides 
-                        a(i, j),      // subdiagonal part
-                        b(i, j),      // diagonal part
-                        c(i, j),      // superdiagonal part
-                        u(i, j),      // column to solve 
-                        &mkl_ldb,     // leading dimension of RHS
-                        &mkl_info
-                        );
+            dgtsv_(
+                &mkl_n,       // matrix order
+                &mkl_nrhs,    // # of right hand sides 
+                a.data(),     // subdiagonal part
+                b.data(),     // diagonal part
+                c.data(),     // superdiagonal part
+                u.data(),     // column to solve 
+                &mkl_ldb,     // leading dimension of RHS
+                &mkl_info
+                );
 
-                    assert(mkl_info == 0);
-                }
+            assert(mkl_info == 0);
         }
 
         double const walltime = t.elapsed();
@@ -274,17 +364,17 @@ struct heat_equation_btcs
             sum = sum + abs_term * abs_term;
         }
 
-        double l2_norm = std::sqrt(sum);
+        double const l2_norm = std::sqrt(sum);
 
         std::cout << std::setprecision(16)
-                  << "WALLTIME == " << walltime << " [s]\n"
-                  << "L2 NORM  == " << l2_norm << "\n";
+                  << "WALLTIME : " << walltime << " [s]\n"
+                  << "L2 NORM  : " << l2_norm << "\n";
     }
 };
 
 int main()
 {
-    std::cout << "SOLVER: LAPACK\n";
+    std::cout << "SOLVER   : MKL MERGED\n";
 
     heat_equation_btcs s;
 
