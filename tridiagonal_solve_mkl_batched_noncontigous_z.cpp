@@ -1,5 +1,7 @@
 #include <iostream>
 #include <iomanip>
+#include <fstream>
+#include <vector>
 #include <algorithm>
 #include <chrono>
 
@@ -10,6 +12,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+
+#include <mkl.h>
 
 struct high_resolution_timer
 {
@@ -205,98 +209,6 @@ struct array3d
     }
 };
 
-void tridiagonal_solve_native(
-    array3d<double>& a, // Lower band
-    array3d<double>& b, // Diagonal
-    array3d<double>& c, // Upper band
-    array3d<double>& u  // Solution
-    )
-{
-    auto const nx = u.nx();
-    auto const ny = u.ny();
-    auto const nz = u.nz();
-
-    // Forward elimination. 
-    for (int k = 1; k < nz; ++k)
-        for (int j = 0; j < ny; ++j)
-        {
-            double* up     = u(_, j, k);
-            double* usub1p = u(_, j, k - 1);
-
-            double* asub1p = a(_, j, k - 1);
-
-            double* bp     = b(_, j, k);
-            double* bsub1p = b(_, j, k - 1);
-
-            double* csub1p = c(_, j, k - 1);
-
-            __assume_aligned(up, 64);
-            __assume_aligned(usub1p, 64);
-
-            __assume_aligned(asub1p, 64);
-
-            __assume_aligned(bp, 64);
-            __assume_aligned(bsub1p, 64);
-
-            __assume_aligned(csub1p, 64);
-
-            #pragma simd
-            for (int i = 0; i < nx; ++i)
-            {
-                // double const m = a[k - 1] / b[k - 1];
-                double const m = asub1p[i] / bsub1p[i];
-                // b[k] -= m * c[k - 1];
-                bp[i] -= m * csub1p[i];
-                // u[k] -= m * u[k - 1];
-                up[i] -= m * usub1p[i];
-            }
-        }
-
-    for (int j = 0; j < ny; ++j)
-    {
-        double* uendp = u(_, j, nz - 1);
-
-        double* bendp = b(_, j, nz - 1);
-
-        __assume_aligned(uendp, 64);
-
-        __assume_aligned(bendp, 64);
-
-        #pragma simd
-        for (int i = 0; i < nx; ++i)
-        {
-            // u[nz - 1] = u[nz - 1] / b[nz - 1];
-            uendp[i] = uendp[i] / bendp[i];
-        }
-    }
- 
-    // Back substitution. 
-    for (int k = nz - 2; k >= 0; --k)
-        for (int j = 0; j < ny; ++j)
-        {
-            double* up     = u(_, j, k);
-            double* uadd1p = u(_, j, k + 1);
-
-            double* bp     = b(_, j, k);
-
-            double* cp     = c(_, j, k);
-
-            __assume_aligned(up, 64);
-            __assume_aligned(uadd1p, 64);
-
-            __assume_aligned(bp, 64);
-
-            __assume_aligned(cp, 64);
-
-            #pragma simd
-            for (int i = 0; i < nx; ++i)
-            {
-                // u[k] = (u[k] - c[k] * u[k + 1]) / b[k];
-                up[i] = (up[i] - cp[i] * uadd1p[i]) / bp[i];
-            }
-        }
-}
-
 // Solves a one-dimensional diffusion equation using the implicit Backward Time,
 // Centered Space (BTCS) finite difference method. The following problem is
 // solve:
@@ -334,6 +246,12 @@ struct heat_equation_btcs
     array3d<double> u;    
 
     array3d<double> error;
+
+    std::vector<double> a_buf;
+    std::vector<double> b_buf;
+    std::vector<double> c_buf;
+
+    std::vector<double> u_buf;
 
   public:
     heat_equation_btcs()
@@ -373,23 +291,24 @@ struct heat_equation_btcs
 
         // Allocate storage for storing error calculations.
         error.resize(nx, ny, nz);
+
+        // Allocate storage for the matrix gather buffers.
+        a_buf.resize(nz - 1);
+        b_buf.resize(nz);
+        c_buf.resize(nz - 1);
+
+        // Allocate storage for the problem state gather buffers.
+        u_buf.resize(nz);
     }
 
     void build_matrix()
     {
-        double const acterm = -r;
-        double const bterm  = 1.0 + 2.0 * r;
- 
         for (int k = 0; k < nz; ++k)
             for (int j = 0; j < ny; ++j)
             {
                 double* bp = b(_, j, k);
-
-                __assume_aligned(bp, 64);
-
-                #pragma simd
                 for (int i = 0; i < nx; ++i)
-                    bp[i] = bterm;
+                    bp[i] = 1.0 + 2.0 * r;
             }
 
         for (int k = 0; k < nz - 1; ++k)
@@ -397,15 +316,10 @@ struct heat_equation_btcs
             {
                 double* ap = a(_, j, k);
                 double* cp = c(_, j, k);
-
-                __assume_aligned(ap, 64);
-                __assume_aligned(cp, 64);
-
-                #pragma simd
                 for (int i = 0; i < nx; ++i)
                 {
-                    ap[i] = acterm;
-                    cp[i] = acterm;
+                    ap[i] = -r;
+                    cp[i] = -r;
                 }
             }
 
@@ -418,13 +332,6 @@ struct heat_equation_btcs
             double* aendp   = a(_, j, nz - 2);
             double* bendp   = b(_, j, nz - 1);
 
-            __assume_aligned(bbeginp, 64);
-            __assume_aligned(cbeginp, 64);
-
-            __assume_aligned(aendp, 64);
-            __assume_aligned(bendp, 64);
-
-            #pragma simd
             for (int i = 0; i < nx; ++i)
             {
                 bbeginp[i] = 1.0; cbeginp[i] = 0.0;
@@ -443,7 +350,42 @@ struct heat_equation_btcs
         {
             build_matrix();
 
-            tridiagonal_solve_native(a, b, c, u);
+            for (int j = 0; j < ny; ++j)
+                for (int i = 0; i < nx; ++i)
+                {
+                    for (int k = 0; k < nz; ++k)
+                    {
+                        b_buf[k] = b(i, j, k);
+                        u_buf[k] = u(i, j, k);
+                    }
+
+                    for (int k = 0; k < nz - 1; ++k)
+                    {
+                        a_buf[k] = a(i, j, k);
+                        c_buf[k] = c(i, j, k);
+                    }
+
+                    int mkl_n    = nz;
+                    int mkl_nrhs = 1;
+                    int mkl_ldb  = nz;
+                    int mkl_info = 0;
+
+                    dgtsv_(
+                        &mkl_n,       // matrix order
+                        &mkl_nrhs,    // # of right hand sides 
+                        a_buf.data(), // subdiagonal part
+                        b_buf.data(), // diagonal part
+                        c_buf.data(), // superdiagonal part
+                        u_buf.data(), // column to solve 
+                        &mkl_ldb,     // leading dimension of RHS
+                        &mkl_info
+                        );
+
+                    assert(mkl_info == 0);
+
+                    for (int k = 0; k < nz; ++k)
+                        u(i, j, k) = u_buf[k];
+                }
         }
 
         double const walltime = t.elapsed();
@@ -481,10 +423,9 @@ struct heat_equation_btcs
 
 int main()
 {
-    std::cout << "SOLVER   : NATIVE\n";
+    std::cout << "SOLVER   : MKL BATCHED NONCONTIGOUS Z\n";
 
     heat_equation_btcs s;
 
     s.solve();
 }
-
