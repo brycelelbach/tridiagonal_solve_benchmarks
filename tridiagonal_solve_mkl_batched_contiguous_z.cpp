@@ -51,7 +51,7 @@ template <typename T>
 T get_env_variable(std::string const& var, T default_val); 
 
 template <>
-std::uint64_t get_env_variable(std::string const& var, std::uint64_t default_val) 
+std::size_t get_env_variable(std::string const& var, std::size_t default_val) 
 {
     char const* const env_str_p(std::getenv(var.c_str()));
 
@@ -62,7 +62,7 @@ std::uint64_t get_env_variable(std::string const& var, std::uint64_t default_val
 
     char* env_str_p_end(nullptr);
 
-    std::uint64_t const r = std::strtoul(env_str.c_str(), &env_str_p_end, 10);
+    std::size_t const r = std::strtoul(env_str.c_str(), &env_str_p_end, 10);
 
     if ((&env_str.back() != env_str_p_end - 1) || ULONG_MAX == r)
     {
@@ -223,10 +223,10 @@ struct heat_equation_btcs
     double D;
     double N;
 
-    std::uint64_t nx;
-    std::uint64_t ny;
-    std::uint64_t nz;
-    std::uint64_t ns;
+    std::size_t nx;
+    std::size_t ny;
+    std::size_t nz;
+    std::size_t ns;
     double nt;
 
   private:
@@ -248,10 +248,10 @@ struct heat_equation_btcs
     {
         D  = get_env_variable<double>("D", 0.1);
         N  = get_env_variable<double>("N", 1.0);
-        nx = get_env_variable<std::uint64_t>("nx", 128);
-        ny = get_env_variable<std::uint64_t>("ny", 128);
-        nz = get_env_variable<std::uint64_t>("nz", 32);
-        ns = get_env_variable<std::uint64_t>("ns", 200);
+        nx = get_env_variable<std::size_t>("nx", 128);
+        ny = get_env_variable<std::size_t>("ny", 128);
+        nz = get_env_variable<std::size_t>("nz", 32);
+        ns = get_env_variable<std::size_t>("ns", 200);
         nt = get_env_variable<double>("nt", 0.002);
     }
 
@@ -259,7 +259,7 @@ struct heat_equation_btcs
     { 
         // Compute time-step size and grid spacing.
         dz = 1.0 / (nz - 1);
-        dt = nt / (ns - 1);
+        dt = nt / ns;
 
         // Compute matrix constant.
         r = D * dt / (dz * dz);
