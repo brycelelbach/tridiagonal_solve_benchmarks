@@ -220,24 +220,6 @@ struct array3d
         nz_ = 0;
     }
 
-    T const& operator()(size_type i, size_type j, size_type k) const noexcept
-    {
-        return data_[index(i, j, k)];
-    }
-    T& operator()(size_type i, size_type j, size_type k) noexcept
-    {
-        return data_[index(i, j, k)];
-    }
-
-    T const* operator()(placeholder, size_type j, size_type k) const noexcept
-    {
-        return &data_[index(j, k)];
-    }
-    T* operator()(placeholder, size_type j, size_type k) noexcept
-    {
-        return &data_[index(j, k)];
-    }
-
     T* data() const noexcept
     {
         return data_;
@@ -247,18 +229,64 @@ struct array3d
         return data_;
     }
 
+    T const& operator()(size_type i, size_type j, size_type k) const noexcept
+    {
+        return data_[index(i, j, k)];
+    }
+    T& operator()(size_type i, size_type j, size_type k) noexcept
+    {
+        return data_[index(i, j, k)];
+    }
+
+    T const* operator()(placeholder p, size_type j, size_type k) const noexcept
+    {
+        return &data_[index(p, j, k)];
+    }
+    T* operator()(placeholder p, size_type j, size_type k) noexcept
+    {
+        return &data_[index(p, j, k)];
+    }
+
+    T const* operator()(size_type i, size_type j, placeholder p) const noexcept
+    {
+        return &data_[index(i, j, p)];
+    }
+    T* operator()(size_type i, size_type j, placeholder p) noexcept
+    {
+        return &data_[index(i, j, p)];
+    }
+
     constexpr size_type index(
         size_type i, size_type j, size_type k
         ) const noexcept
     {
         return i + nx_ * j + nx_ * ny_ * k;
-    }    
+    }
     constexpr size_type index(
-        size_type j, size_type k
+        placeholder, size_type j, size_type k
         ) const noexcept
     {
         return nx_ * j + nx_ * ny_ * k;
+    }
+    constexpr size_type index(
+        size_type i, size_type j, placeholder
+        ) const noexcept
+    {
+        return i + nx_ * j;
     }    
+
+    constexpr size_type stride_x() const noexcept
+    {
+        return 1;
+    }
+    constexpr size_type stride_y() const noexcept
+    {
+        return nx_;
+    }
+    constexpr size_type stride_z() const noexcept
+    {
+        return nx_ * ny_;
+    }
 
     constexpr size_type nx() const noexcept
     {
@@ -287,6 +315,8 @@ inline void copy(
     array3d<double>::size_type const nx = src.nx();
     array3d<double>::size_type const nz = src.nz();
 
+    __assume(0 == (nx % 8)); 
+
     assert(dest.nx() == src.nx());
     assert(dest.ny() == src.ny());
     assert(dest.nz() == src.nz());
@@ -299,8 +329,6 @@ inline void copy(
 
             __assume_aligned(destp, 64);
             __assume_aligned(srcp, 64);
-
-            __assume(0 == (nx % 8)); 
 
             #pragma simd
             for (int i = 0; i < nx; ++i)
@@ -520,11 +548,19 @@ inline void tridiagonal_solve_native(
             for (int i = 0; i < nx; ++i)
             {
                 // double const m = a[k - 1] / b[k - 1];
-                double const m = asub1p[i] / bsub1p[i];
-                // b[k] -= m * c[k - 1];
-                bp[i] -= m * csub1p[i];
-                // u[k] -= m * u[k - 1];
-                up[i] -= m * usub1p[i];
+
+                // Numerator
+                float num0 = asub1p[i];
+
+                // Denominator
+                float const den0 = bsub1p[i];
+
+                num0 /= den0;
+
+                double const m0 = num0;
+
+                bp[i] -= m0 * csub1p[i];
+                up[i] -= m0 * usub1p[i];
             }
         }
 
@@ -542,7 +578,16 @@ inline void tridiagonal_solve_native(
         for (int i = 0; i < nx; ++i)
         {
             // u[nz - 1] = u[nz - 1] / b[nz - 1];
-            uendp[i] = uendp[i] / bendp[i];
+
+            // Numerator
+            float num0 = uendp[i];
+
+            // Denominator
+            float const den0 = bendp[i];
+
+            num0 /= den0;
+
+            uendp[i] = num0;
         }
     }
  
@@ -568,7 +613,16 @@ inline void tridiagonal_solve_native(
             for (int i = 0; i < nx; ++i)
             {
                 // u[k] = (u[k] - c[k] * u[k + 1]) / b[k];
-                up[i] = (up[i] - cp[i] * uadd1p[i]) / bp[i];
+
+                // Numerator
+                float num0 = (up[i] - cp[i] * uadd1p[i]);
+
+                // Denominator
+                float const den0 = bp[i];
+
+                num0 /= den0;
+
+                up[i] = num0;
             }
         }
 }
@@ -578,9 +632,9 @@ inline void tridiagonal_solve_native(
 struct heat_equation_btcs
 {
     bool verify;
+    bool header;
 
     double D;
-    double N;
 
     std::uint64_t nx;
     std::uint64_t ny;
@@ -593,7 +647,9 @@ struct heat_equation_btcs
   private:
     double dz;
 
-    double coef;
+    static double constexpr N = 1.0;
+
+    double A_coef;
 
     array3d<double> a;
     array3d<double> b;
@@ -603,15 +659,13 @@ struct heat_equation_btcs
 
     array3d<double> r;
 
-    array3d<double> error;
-
   public:
     heat_equation_btcs() noexcept
     {
         verify = get_env_variable<bool>("verify", false);
+        header = get_env_variable<bool>("header", false);
 
         D  = get_env_variable<double>("D", 0.1);
-        N  = get_env_variable<double>("N", 1.0);
 
         nx = get_env_variable<std::uint64_t>("nx", 32);
         ny = get_env_variable<std::uint64_t>("ny", 2048);
@@ -633,7 +687,7 @@ struct heat_equation_btcs
         dz = 1.0 / (nz - 1);
 
         // Compute matrix constant.
-        coef = D * dt / (dz * dz);
+        A_coef = D * dt / (dz * dz);
 
         // Allocate storage for the matrix.
         a.resize(nx, ny, nz - 1);
@@ -652,15 +706,12 @@ struct heat_equation_btcs
 
         // Allocate storage for the residual.
         r.resize(nx, ny, nz);
-
-        // Allocate storage for error calculations.
-        error.resize(nx, ny, nz);
     }
 
     void build_matrix(std::ptrdiff_t j_begin, std::ptrdiff_t j_end) noexcept
     {
-        double const ac_term = -coef;
-        double const b_term  = 1.0 + 2.0 * coef;
+        double const ac_term = -A_coef;
+        double const b_term  = 1.0 + 2.0 * A_coef;
 
         __assume(0 == (nx % 8)); 
  
@@ -719,21 +770,6 @@ struct heat_equation_btcs
 
     double l2_norm(std::uint64_t step)
     {
-        for (int k = 0; k < nz; ++k)
-            for (int j = 0; j < ny; ++j)
-            {
-                double* up     = u(_, j, k);
-                double* errorp = error(_, j, k);
-                for (int i = 0; i < nx; ++i)
-                {
-                    double exact = std::exp( -D * (N * N)
-                                           * (M_PI * M_PI) * (dt * step))
-                                 * std::sin(N * M_PI * (dz * k)); 
-
-                    errorp[i] = (up[i] - exact); 
-                }
-            }
-
         double e = 0.0;
 
         for (int j = 0; j < ny; ++j)
@@ -741,9 +777,20 @@ struct heat_equation_btcs
             {
                 double sum = 0.0;
 
+                double const* up = u(i, j, _);
+
+                array3d<double>::size_type const stride = u.stride_z();
+
+                __assume_aligned(up, 64);
+
+                #pragma simd
                 for (int k = 0; k < nz; ++k)
                 {
-                    double const abs_term = std::fabs(error(i, j, k));
+                    double exact = std::exp( -D * (N * N)
+                                           * (M_PI * M_PI) * (dt * step))
+                                 * std::sin(N * M_PI * (dz * k)); 
+
+                    double const abs_term = std::fabs(up[k * stride] - exact);
                     sum = sum + abs_term * abs_term;
                 }
 
@@ -839,9 +886,34 @@ struct heat_equation_btcs
 
         double const l2 = l2_norm(ns);  
 
+        if (header)
+            std::cout <<
+                "Algorithm,"
+                "Build Type,"
+                "Diffusion Coefficient (D),"
+                "X (Horizontal) Extent (nx),"
+                "Y (Horizontal) Extent (ny),"
+                "Z (Horizontal) Extent (nz),"
+                "Tile Width (tw),"
+                "# of Timesteps (ns),"
+                "Timestep Size (dt),"
+                "Walltime [s],"
+                "L2 Norm"
+                ;
+
         std::cout
-            << "WALLTIME : " << std::setprecision(7) << walltime << " [s]\n"
-            << "L2 NORM  : " << std::setprecision(17) << l2 << "\n";
+            << "Streaming Mixed Precision,"
+            << BUILD_TYPE << ","
+            << D << ","
+            << nx << ","
+            << ny << ","
+            << nz << ","
+            << tw << ","
+            << ns << ","
+            << dt << ","
+            << std::setprecision(7) << walltime << ","
+            << std::setprecision(17) << l2 << "\n"
+            ;
     }
 };
 
