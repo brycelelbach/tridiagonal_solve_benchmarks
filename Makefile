@@ -3,8 +3,12 @@ CXX=icpc
 ifdef DEBUG
   CXXFLAGS+=-O0 -ggdb
 else
-  CXXFLAGS+=-O3
+  CXXFLAGS+=-O3 -static
+  ifdef DISABLE_ASSERTS
+    CXXFLAGS+=-DNDEBUG
+  endif
 endif
+
 
 CXXFLAGS+=-mavx -std=c++11 -mkl=sequential
 SOURCES=$(shell ls -1 $(CURDIR)/*.cpp)
@@ -23,9 +27,11 @@ $(DIRECTORIES)/:
 % : %.cpp
 	@echo "**************************************************"
 	@echo "Building $(*F)"
-	@$(CXX) $(CXXFLAGS) $< -o $(CURDIR)/build/$(*F)
+	$(CXX) $(CXXFLAGS) $< -o $(CURDIR)/build/$(*F)
+	@echo "**************************************************"
 	@echo "Running $(*F)"
 	@build/$(*F)
+	@echo
 
 clean:
 	@echo "Cleaning build directory"

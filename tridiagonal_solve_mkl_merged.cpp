@@ -6,6 +6,7 @@
 #include <chrono>
 
 #include <cmath>
+#include <cfenv>
 #include <cstring>
 #include <cassert>
 #include <climits>
@@ -365,14 +366,18 @@ struct heat_equation_btcs
 
         double const l2_norm = std::sqrt(sum);
 
-        std::cout << std::setprecision(16)
-                  << "WALLTIME : " << walltime << " [s]\n"
-                  << "L2 NORM  : " << l2_norm << "\n";
+        std::cout
+            << "WALLTIME : " << std::setprecision(7) << walltime << " [s]\n"
+            << "L2 NORM  : " << std::setprecision(17) << l2_norm << "\n";
     }
 };
 
 int main()
 {
+    feenableexcept(FE_DIVBYZERO);
+    feenableexcept(FE_INVALID);
+    feenableexcept(FE_OVERFLOW);
+
     std::cout << "SOLVER   : MKL MERGED\n";
 
     heat_equation_btcs s;

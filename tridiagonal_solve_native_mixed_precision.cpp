@@ -26,6 +26,7 @@
 #include <type_traits>
 
 #include <cmath>
+#include <cfenv>
 #include <cstring>
 #include <cassert>
 #include <climits>
@@ -286,6 +287,8 @@ inline void copy(
     array3d<double>::size_type const nx = src.nx();
     array3d<double>::size_type const nz = src.nz();
 
+    __assume(0 == (nx % 8)); 
+
     assert(dest.nx() == src.nx());
     assert(dest.ny() == src.ny());
     assert(dest.nz() == src.nz());
@@ -298,8 +301,6 @@ inline void copy(
 
             __assume_aligned(destp, 64);
             __assume_aligned(srcp, 64);
-
-            __assume(0 == (nx % 8)); 
 
             #pragma simd
             for (int i = 0; i < nx; ++i)
@@ -327,6 +328,8 @@ inline void residual(
 {
     array3d<double>::size_type const nx = r.nx();
     array3d<double>::size_type const nz = r.nz();
+
+    __assume(0 == (nx % 8)); 
 
     assert(r.nx()     == a.nx());
     assert(r.ny()     == a.ny());
@@ -365,8 +368,6 @@ inline void residual(
         __assume_aligned(u0p, 64);
         __assume_aligned(u1p, 64);
 
-        __assume(0 == (nx % 8)); 
-
         #pragma simd
         for (int i = 0; i < nx; ++i)
         {
@@ -404,8 +405,6 @@ inline void residual(
             __assume_aligned(up, 64);
             __assume_aligned(uadd1p, 64);
 
-            __assume(0 == (nx % 8)); 
-
             #pragma simd
             for (int i = 0; i < nx; ++i)
             {
@@ -440,8 +439,6 @@ inline void residual(
 
         __assume_aligned(unz2p, 64);
         __assume_aligned(unz1p, 64);
-
-        __assume(0 == (nx % 8)); 
 
         #pragma simd
         for (int i = 0; i < nx; ++i)
@@ -481,6 +478,8 @@ inline void tridiagonal_solve_native(
     array3d<double>::size_type const nx = u.nx();
     array3d<double>::size_type const nz = u.nz();
 
+    __assume(0 == (nx % 8)); 
+
     assert(u.nx()     == a.nx());
     assert(u.ny()     == a.ny());
     assert(u.nz() - 1 == a.nz());
@@ -517,17 +516,50 @@ inline void tridiagonal_solve_native(
             __assume_aligned(up, 64);
             __assume_aligned(usub1p, 64);
 
-            __assume(0 == (nx % 8)); 
-
             #pragma simd
             for (int i = 0; i < nx; ++i)
             {
+/*
                 // double const m = a[k - 1] / b[k - 1];
                 double const m = asub1p[i] / bsub1p[i];
                 // b[k] -= m * c[k - 1];
                 bp[i] -= m * csub1p[i];
                 // u[k] -= m * u[k - 1];
                 up[i] -= m * usub1p[i];
+*/
+/*
+                // Numerator
+                float num0 = asub1p[i];
+                float num1 = asub1p[i + 1];
+
+                // Denominator
+                float const den0 = bsub1p[i];
+                float const den1 = bsub1p[i + 1];
+
+                num0 /= den0;
+                num1 /= den1;
+
+                double const m0 = num0;
+                double const m1 = num1;
+
+                bp[i]     -= m0 * csub1p[i];
+                up[i]     -= m0 * usub1p[i];
+
+                bp[i + 1] -= m1 * csub1p[i + 1];
+                up[i + 1] -= m1 * usub1p[i + 1]; 
+*/
+                // Numerator
+                float num0 = asub1p[i];
+
+                // Denominator
+                float const den0 = bsub1p[i];
+
+                num0 /= den0;
+
+                double const m0 = num0;
+
+                bp[i] -= m0 * csub1p[i];
+                up[i] -= m0 * usub1p[i];
             }
         }
 
@@ -541,13 +573,37 @@ inline void tridiagonal_solve_native(
 
         __assume_aligned(uendp, 64);
 
-        __assume(0 == (nx % 8)); 
-
         #pragma simd
         for (int i = 0; i < nx; ++i)
         {
             // u[nz - 1] = u[nz - 1] / b[nz - 1];
+/*
             uendp[i] = uendp[i] / bendp[i];
+*/
+/*
+            // Numerator
+            float num0 = uendp[i];
+            float num1 = uendp[i + 1];
+
+            // Denominator
+            float const den0 = bendp[i];
+            float const den1 = bendp[i + 1];
+
+            num0 /= den0;
+            num1 /= den1;
+
+            uendp[i]     = num0;
+            uendp[i + 1] = num1;
+*/
+            // Numerator
+            float num0 = uendp[i];
+
+            // Denominator
+            float const den0 = bendp[i];
+
+            num0 /= den0;
+
+            uendp[i] = num0;
         }
     }
  
@@ -569,13 +625,37 @@ inline void tridiagonal_solve_native(
             __assume_aligned(up, 64);
             __assume_aligned(uadd1p, 64);
 
-            __assume(0 == (nx % 8)); 
-
             #pragma simd
             for (int i = 0; i < nx; ++i)
             {
+/*
                 // u[k] = (u[k] - c[k] * u[k + 1]) / b[k];
                 up[i] = (up[i] - cp[i] * uadd1p[i]) / bp[i];
+*/
+/*
+                // Numerator
+                float num0 = (up[i]     - cp[i]     * uadd1p[i]);
+                float num1 = (up[i + 1] - cp[i + 1] * uadd1p[i + 1]);
+
+                // Denominator
+                float const den0 = bp[i];
+                float const den1 = bp[i + 1];
+
+                num0 /= den0;
+                num1 /= den1;
+
+                up[i]     = num0;
+                up[i + 1] = num1;
+*/
+                // Numerator
+                float num0 = (up[i] - cp[i] * uadd1p[i]);
+
+                // Denominator
+                float const den0 = bp[i];
+
+                num0 /= den0;
+
+                up[i] = num0;
             }
         }
 }
@@ -592,13 +672,13 @@ struct heat_equation_btcs
     std::uint64_t nx;
     std::uint64_t ny;
     std::uint64_t nz;
-    std::uint64_t ns;
     std::uint64_t tw;
-    double nt;
+
+    std::uint64_t ns;
+    double dt;
 
   private:
     double dz;
-    double dt;
 
     double coef;
 
@@ -619,12 +699,14 @@ struct heat_equation_btcs
 
         D  = get_env_variable<double>("D", 0.1);
         N  = get_env_variable<double>("N", 1.0);
-        nx = get_env_variable<std::uint64_t>("nx", 128);
-        ny = get_env_variable<std::uint64_t>("ny", 128);
+
+        nx = get_env_variable<std::uint64_t>("nx", 32);
+        ny = get_env_variable<std::uint64_t>("ny", 2048);
         nz = get_env_variable<std::uint64_t>("nz", 32);
-        ns = get_env_variable<std::uint64_t>("ns", 200);
-        tw = get_env_variable<std::uint64_t>("tw", 8);
-        nt = get_env_variable<double>("nt", 0.002);
+        tw = get_env_variable<std::uint64_t>("tw", 16);
+
+        ns = get_env_variable<std::uint64_t>("ns", 50);
+        dt = get_env_variable<double>("dt", 1.0e-7);
 
         assert(0 == (nx % 8)); // Ensure 64-byte alignment.
         assert(8 <= nx); 
@@ -634,9 +716,8 @@ struct heat_equation_btcs
 
     void initialize() noexcept 
     { 
-        // Compute time-step size and grid spacing.
+        // Compute grid spacing.
         dz = 1.0 / (nz - 1);
-        dt = nt / ns;
 
         // Compute matrix constant.
         coef = D * dt / (dz * dz);
@@ -667,6 +748,8 @@ struct heat_equation_btcs
     {
         double const ac_term = -coef;
         double const b_term  = 1.0 + 2.0 * coef;
+
+        __assume(0 == (nx % 8)); 
  
         for (int k = 0; k < nz; ++k)
             for (int j = j_begin; j < j_end; ++j)
@@ -674,8 +757,6 @@ struct heat_equation_btcs
                 double* bp = b(_, j, k);
 
                 __assume_aligned(bp, 64);
-
-                __assume(0 == (nx % 8)); 
 
                 #pragma simd
                 for (int i = 0; i < nx; ++i)
@@ -690,8 +771,6 @@ struct heat_equation_btcs
 
                 __assume_aligned(ap, 64);
                 __assume_aligned(cp, 64);
-
-                __assume(0 == (nx % 8)); 
 
                 #pragma simd
                 for (int i = 0; i < nx; ++i)
@@ -715,8 +794,6 @@ struct heat_equation_btcs
 
             __assume_aligned(aendp, 64);
             __assume_aligned(bendp, 64);
-
-            __assume(0 == (nx % 8)); 
 
             #pragma simd
             for (int i = 0; i < nx; ++i)
@@ -832,9 +909,9 @@ struct heat_equation_btcs
 
                 std::printf(
                     "STEP %04u : "
-                    "TIME %10.7g = %10.7g + %10.7g : "
-                    "L2 NORM %22.16g : "
-                    "MAX RESIDUAL %22.16g\n"
+                    "TIME %-10.7g = %-10.7g + %-10.7g : "
+                    "L2 NORM %-22.17g : "
+                    "MAX RESIDUAL %-22.17g\n"
                   , s
                   , dt * (s + 1)
                   , dt * s
@@ -847,13 +924,19 @@ struct heat_equation_btcs
 
         double const walltime = t.elapsed();
 
-        std::cout << "WALLTIME : " << walltime << " [s]\n";
+        double const l2 = l2_norm(ns);  
+
+        std::cout
+            << "WALLTIME : " << std::setprecision(6) << walltime << " [s]\n"
+            << "L2 NORM  : " << std::setprecision(16) << l2 << "\n";
     }
 };
 
 int main()
 {
-    std::cout << "SOLVER : NATIVE\n";
+    feenableexcept(FE_DIVBYZERO);
+    feenableexcept(FE_INVALID);
+    feenableexcept(FE_OVERFLOW);
 
     heat_equation_btcs s;
 

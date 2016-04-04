@@ -6,6 +6,7 @@
 #include <chrono>
 
 #include <cmath>
+#include <cfenv>
 #include <cstring>
 #include <cassert>
 #include <climits>
@@ -100,10 +101,6 @@ double get_env_variable(std::string const& var, double default_val)
     return r;
 }
 
-struct placeholder {};
-
-constexpr placeholder _{};
-
 template <typename T, std::size_t Alignment = 64>
 struct array3d
 {
@@ -168,13 +165,13 @@ struct array3d
         return data_[index(i, j, k)];
     }
 
-    T const* operator()(placeholder, size_type j, size_type k) const noexcept
+    T const* operator()(size_type i, size_type j) const noexcept
     {
-        return &data_[index(j, k)];
+        return &data_[index(i, j)];
     }
-    T* operator()(placeholder, size_type j, size_type k) noexcept
+    T* operator()(size_type i, size_type j) noexcept
     {
-        return &data_[index(j, k)];
+        return &data_[index(i, j)];
     }
 
     T* data() const noexcept
@@ -188,11 +185,11 @@ struct array3d
 
     size_type index(size_type i, size_type j, size_type k) const noexcept
     {
-        return i + nx_ * j + nx_ * ny_ * k;
+        return nz_ * ny_ * i + nz_ * j + k;
     }    
-    size_type index(size_type j, size_type k) const noexcept
+    size_type index(size_type i, size_type j) const noexcept
     {
-        return nx_ * j + nx_ * ny_ * k;
+        return nz_ * ny_ * i + nz_ * j;
     }    
 
     constexpr size_type nx() const noexcept
@@ -247,12 +244,6 @@ struct heat_equation_btcs
 
     array3d<double> error;
 
-    std::vector<double> a_buf;
-    std::vector<double> b_buf;
-    std::vector<double> c_buf;
-
-    std::vector<double> u_buf;
-
   public:
     heat_equation_btcs()
     {
@@ -281,63 +272,43 @@ struct heat_equation_btcs
 
         // Allocate storage for the problem state and initialize it.
         u.resize(nx, ny, nz);
-        for (int k = 0; k < nz; ++k)
+        for (int i = 0; i < nx; ++i)
             for (int j = 0; j < ny; ++j)
             {
-                double* up = u(_, j, k);
-                for (int i = 0; i < nx; ++i)
-                    up[i] = std::sin(N * M_PI * (dz * k));
+                double* up = u(i, j);
+                for (int k = 0; k < nz; ++k)
+                    up[k] = std::sin(N * M_PI * (dz * k));
             }
 
         // Allocate storage for storing error calculations.
         error.resize(nx, ny, nz);
-
-        // Allocate storage for the matrix gather buffers.
-        a_buf.resize(nz - 1);
-        b_buf.resize(nz);
-        c_buf.resize(nz - 1);
-
-        // Allocate storage for the problem state gather buffers.
-        u_buf.resize(nz);
     }
 
     void build_matrix()
     {
-        for (int k = 0; k < nz; ++k)
+        for (int i = 0; i < nx; ++i)
             for (int j = 0; j < ny; ++j)
             {
-                double* bp = b(_, j, k);
-                for (int i = 0; i < nx; ++i)
-                    bp[i] = 1.0 + 2.0 * r;
-            }
+                double* bp = b(i, j);
+                for (int k = 0; k < nz; ++k)
+                    bp[k] = 1.0 + 2.0 * r;
 
-        for (int k = 0; k < nz - 1; ++k)
-            for (int j = 0; j < ny; ++j)
-            {
-                double* ap = a(_, j, k);
-                double* cp = c(_, j, k);
-                for (int i = 0; i < nx; ++i)
+                double* ap = a(i, j);
+                double* cp = c(i, j);
+                for (int k = 0; k < nz - 1; ++k)
                 {
-                    ap[i] = -r;
-                    cp[i] = -r;
+                    ap[k] = -r;
+                    cp[k] = -r;
                 }
             }
 
         // Boundary conditions.
-        for (int j = 0; j < ny; ++j)
-        {
-            double* bbeginp = b(_, j, 0);
-            double* cbeginp = c(_, j, 0);
-
-            double* aendp   = a(_, j, nz - 2);
-            double* bendp   = b(_, j, nz - 1);
-
-            for (int i = 0; i < nx; ++i)
+        for (int i = 0; i < nx; ++i)
+            for (int j = 0; j < ny; ++j)
             {
-                bbeginp[i] = 1.0; cbeginp[i] = 0.0;
-                aendp[i]   = 0.0; bendp[i]   = 1.0;
+                b(i, j, 0     ) = 1.0; c(i, j, 0     ) = 0.0;
+                a(i, j, nz - 2) = 0.0; b(i, j, nz - 1) = 1.0;
             }
-        }
     }
 
     void solve()
@@ -350,21 +321,9 @@ struct heat_equation_btcs
         {
             build_matrix();
 
-            for (int j = 0; j < ny; ++j)
-                for (int i = 0; i < nx; ++i)
+            for (int i = 0; i < nx; ++i)
+                for (int j = 0; j < ny; ++j)
                 {
-                    for (int k = 0; k < nz; ++k)
-                    {
-                        b_buf[k] = b(i, j, k);
-                        u_buf[k] = u(i, j, k);
-                    }
-
-                    for (int k = 0; k < nz - 1; ++k)
-                    {
-                        a_buf[k] = a(i, j, k);
-                        c_buf[k] = c(i, j, k);
-                    }
-
                     int mkl_n    = nz;
                     int mkl_nrhs = 1;
                     int mkl_ldb  = nz;
@@ -373,35 +332,32 @@ struct heat_equation_btcs
                     dgtsv_(
                         &mkl_n,       // matrix order
                         &mkl_nrhs,    // # of right hand sides 
-                        a_buf.data(), // subdiagonal part
-                        b_buf.data(), // diagonal part
-                        c_buf.data(), // superdiagonal part
-                        u_buf.data(), // column to solve 
+                        a(i, j),      // subdiagonal part
+                        b(i, j),      // diagonal part
+                        c(i, j),      // superdiagonal part
+                        u(i, j),      // column to solve 
                         &mkl_ldb,     // leading dimension of RHS
                         &mkl_info
                         );
 
                     assert(mkl_info == 0);
-
-                    for (int k = 0; k < nz; ++k)
-                        u(i, j, k) = u_buf[k];
                 }
         }
 
         double const walltime = t.elapsed();
 
-        for (int k = 0; k < nz; ++k)
+        for (int i = 0; i < nx; ++i)
             for (int j = 0; j < ny; ++j)
             {
-                double* up     = u(_, j, k);
-                double* errorp = error(_, j, k);
-                for (int i = 0; i < nx; ++i)
+                double* up     = u(i, j);
+                double* errorp = error(i, j);
+                for (int k = 0; k < nz; ++k)
                 {
                     double exact = std::exp( -D * (N * N)
                                            * (M_PI * M_PI) * (dt * ns))
                                  * std::sin(N * M_PI * (dz * k)); 
 
-                    errorp[i] = (up[i] - exact); 
+                    errorp[k] = (up[k] - exact); 
                 }
             }
 
@@ -415,15 +371,19 @@ struct heat_equation_btcs
 
         double const l2_norm = std::sqrt(sum);
 
-        std::cout << std::setprecision(16)
-                  << "WALLTIME : " << walltime << " [s]\n"
-                  << "L2 NORM  : " << l2_norm << "\n";
+        std::cout
+            << "WALLTIME : " << std::setprecision(7) << walltime << " [s]\n"
+            << "L2 NORM  : " << std::setprecision(17) << l2_norm << "\n";
     }
 };
 
 int main()
 {
-    std::cout << "SOLVER   : MKL BATCHED NONCONTIGUOUS Z\n";
+    feenableexcept(FE_DIVBYZERO);
+    feenableexcept(FE_INVALID);
+    feenableexcept(FE_OVERFLOW);
+
+    std::cout << "SOLVER   : MKL BATCHED CONTIGUOUS Z\n";
 
     heat_equation_btcs s;
 
