@@ -140,7 +140,7 @@ double get_env_variable(std::string const& var, double default_val)
 
     double const r = std::strtod(env_str.c_str(), &env_str_p_end);
 
-    if ((&env_str.back() != env_str_p_end - 1) || ULONG_MAX == r)
+    if ((&env_str.back() != env_str_p_end - 1) || HUGE_VAL == r)
     {
         std::cout << "ERROR: invalid value '" << env_str << "' "
                      "for floating point environment variable '" << var << "'"
