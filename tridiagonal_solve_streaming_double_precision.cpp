@@ -205,7 +205,7 @@ struct array3d
 
         std::memset(p, 0, nx * ny * nz * sizeof(T));
 
-        data_ = reinterpret_cast<double*>(p);
+        data_ = reinterpret_cast<T*>(p);
 
         nx_ = nx;
         ny_ = ny;

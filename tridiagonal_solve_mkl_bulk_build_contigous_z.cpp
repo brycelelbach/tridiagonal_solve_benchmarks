@@ -172,7 +172,7 @@ struct placeholder {};
 
 constexpr placeholder _ {};
 
-template <typename T, std::size_t Alignment = 64>
+template <typename T, std::uint64_t Alignment = 64>
 struct array3d
 {
     typedef std::ptrdiff_t size_type;
@@ -183,7 +183,7 @@ struct array3d
     size_type nx_, ny_, nz_;
 
   public:
-    constexpr array3d() : data_(), nx_(), ny_(), nz_() {}
+    constexpr array3d() noexcept : data_(), nx_(), ny_(), nz_() {}
 
     array3d(size_type nx, size_type ny, size_type nz) noexcept
     {
@@ -207,7 +207,7 @@ struct array3d
 
         std::memset(p, 0, nx * ny * nz * sizeof(T));
 
-        data_ = reinterpret_cast<double*>(p);
+        data_ = reinterpret_cast<T*>(p);
 
         nx_ = nx;
         ny_ = ny;
@@ -219,7 +219,7 @@ struct array3d
         if (data_)
         {
             assert(0 != nx_ * ny_ * nz_);
-            free(data_);
+            std::free(data_);
         }
 
         data_ = 0;
