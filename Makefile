@@ -4,17 +4,17 @@ ifdef DEBUG
   CXXFLAGS+=-O0 -ggdb
   ifeq ($(ASSERTS),0)
     CXXFLAGS+=-DNDEBUG
-    CXXFLAGS+=-DBUILD_TYPE=\"DEBUG_ASSERTS_OFF\"
+    CXXFLAGS+=-DBUILD_TYPE=\"Debug\ Asserts\ Off\"
   else
-    CXXFLAGS+=-DBUILD_TYPE=\"DEBUG_ASSERTS_ON\"
+    CXXFLAGS+=-DBUILD_TYPE=\"Debug\ Asserts\ On\"
   endif
 else
   CXXFLAGS+=-O3 -static
   ifeq ($(ASSERTS),0)
     CXXFLAGS+=-DNDEBUG
-    CXXFLAGS+=-DBUILD_TYPE=\"RELEASE_ASSERTS_OFF\"
+    CXXFLAGS+=-DBUILD_TYPE=\"Release\ Asserts\ Off\"
   else
-    CXXFLAGS+=-DBUILD_TYPE=\"RELEASE_ASSERTS_ON\"
+    CXXFLAGS+=-DBUILD_TYPE=\"Release\ Asserts\ On\"
   endif
 endif
 

@@ -1,20 +1,43 @@
+////////////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2015 Bryce Adelstein Lelbach aka wash
+//
+// Distributed under the Boost Software License, Version 1.0. (See accompanying
+// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+////////////////////////////////////////////////////////////////////////////////
+
+// Solves a one-dimensional diffusion equation using the implicit Backward Time,
+// Centered Space (BTCS) finite difference method. The following problem is
+// solve:
+//
+//     u_t = D * u_zz, z in (0, 1)
+//
+//     u(z, 0) = sin(N * pi * z)
+//     u(0, t) = u(1, t) = 0
+// 
+// This problem has an exact solution:
+//
+//     u(z, t) = e ^ (-D * N^2 * pi^2 * t) * sin(N * pi * z)
+
 #include <iostream>
+#include <sstream>
 #include <iomanip>
-#include <fstream>
-#include <vector>
 #include <algorithm>
 #include <chrono>
+#include <type_traits>
 
 #include <cmath>
 #include <cfenv>
 #include <cstring>
 #include <cassert>
 #include <climits>
+#include <cstdio>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 
 #include <mkl.h>
+
+// FIXME: Some of these can be noexcept/constexpr
 
 struct high_resolution_timer
 {
@@ -48,11 +71,15 @@ struct high_resolution_timer
     std::uint64_t start_time_;
 };
 
+///////////////////////////////////////////////////////////////////////////////
+
+///////////////////////////////////////////////////////////////////////////////
+
 template <typename T>
 T get_env_variable(std::string const& var, T default_val); 
 
 template <>
-std::size_t get_env_variable(std::string const& var, std::size_t default_val) 
+bool get_env_variable(std::string const& var, bool default_val) 
 {
     char const* const env_str_p(std::getenv(var.c_str()));
 
@@ -63,7 +90,32 @@ std::size_t get_env_variable(std::string const& var, std::size_t default_val)
 
     char* env_str_p_end(nullptr);
 
-    std::size_t const r = std::strtoul(env_str.c_str(), &env_str_p_end, 10);
+    std::uint64_t const r = std::strtoul(env_str.c_str(), &env_str_p_end, 10);
+
+    if ((&env_str.back() != env_str_p_end - 1) || ULONG_MAX == r)
+    {
+        std::cout << "ERROR: invalid value '" << env_str << "' "
+                     "for boolean environment variable '" << var << "'"
+                     "\n";
+        std::exit(1);
+    }
+
+    return bool(r);
+}
+
+template <>
+std::uint64_t get_env_variable(std::string const& var, std::uint64_t default_val) 
+{
+    char const* const env_str_p(std::getenv(var.c_str()));
+
+    if (nullptr == env_str_p)
+        return default_val;
+
+    std::string const env_str(env_str_p);
+
+    char* env_str_p_end(nullptr);
+
+    std::uint64_t const r = std::strtoul(env_str.c_str(), &env_str_p_end, 10);
 
     if ((&env_str.back() != env_str_p_end - 1) || ULONG_MAX == r)
     {
@@ -101,11 +153,28 @@ double get_env_variable(std::string const& var, double default_val)
     return r;
 }
 
+///////////////////////////////////////////////////////////////////////////////
+
+template <
+    typename T
+  , typename = typename std::enable_if<std::is_floating_point<T>::value>::type
+    >
+constexpr bool fp_equals(
+    T x, T y, T epsilon = std::numeric_limits<T>::epsilon()
+    ) noexcept
+{
+    return ( ((x + epsilon >= y) && (x - epsilon <= y))
+           ? true
+           : false);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
 struct placeholder {};
 
-constexpr placeholder _{};
+constexpr placeholder _ {};
 
-template <typename T, std::size_t Alignment = 64>
+template <typename T, std::uint64_t Alignment = 64>
 struct array3d
 {
     typedef std::ptrdiff_t size_type;
@@ -116,9 +185,9 @@ struct array3d
     size_type nx_, ny_, nz_;
 
   public:
-    array3d() : data_(), nx_(), ny_(), nz_() {}
+    constexpr array3d() noexcept : data_(), nx_(), ny_(), nz_() {}
 
-    array3d(size_type nx, size_type ny, size_type nz)
+    array3d(size_type nx, size_type ny, size_type nz) noexcept
     {
         resize(nx, ny, nz);
     }
@@ -128,12 +197,13 @@ struct array3d
         clear();
     }
 
-    void resize(size_type nx, size_type ny, size_type nz)
+    void resize(size_type nx, size_type ny, size_type nz) noexcept
     {
         clear();
 
-        void* p = 0; 
+        assert(0 == ((nx * ny * nz * sizeof(T)) % Alignment));
 
+        void* p = 0; 
         int const r = posix_memalign(&p, Alignment, nx * ny * nz * sizeof(T));
         assert(0 == r);
 
@@ -146,36 +216,18 @@ struct array3d
         nz_ = nz;
     }
 
-    void clear()
+    void clear() noexcept
     {
         if (data_)
         {
             assert(0 != nx_ * ny_ * nz_);
-            free(data_);
+            std::free(data_);
         }
 
         data_ = 0;
         nx_ = 0;
         ny_ = 0;
         nz_ = 0;
-    }
-
-    T const& operator()(size_type i, size_type j, size_type k) const noexcept
-    {
-        return data_[index(i, j, k)];
-    }
-    T& operator()(size_type i, size_type j, size_type k) noexcept
-    {
-        return data_[index(i, j, k)];
-    }
-
-    T const* operator()(placeholder, size_type j, size_type k) const noexcept
-    {
-        return &data_[index(j, k)];
-    }
-    T* operator()(placeholder, size_type j, size_type k) noexcept
-    {
-        return &data_[index(j, k)];
     }
 
     T* data() const noexcept
@@ -187,14 +239,79 @@ struct array3d
         return data_;
     }
 
-    size_type index(size_type i, size_type j, size_type k) const noexcept
+    T const& operator()(size_type i, size_type j, size_type k) const noexcept
+    {
+        return data_[index(i, j, k)];
+    }
+    T& operator()(size_type i, size_type j, size_type k) noexcept
+    {
+        return data_[index(i, j, k)];
+    }
+
+    T const* operator()(placeholder p, size_type j, size_type k) const noexcept
+    {
+        return &data_[index(p, j, k)];
+    }
+    T* operator()(placeholder p, size_type j, size_type k) noexcept
+    {
+        return &data_[index(p, j, k)];
+    }
+
+    T const* operator()(size_type i, placeholder p, size_type k) const noexcept
+    {
+        return &data_[index(i, p, k)];
+    }
+    T* operator()(size_type i, placeholder p, size_type k) noexcept
+    {
+        return &data_[index(i, p, k)];
+    }
+
+    T const* operator()(size_type i, size_type j, placeholder p) const noexcept
+    {
+        return &data_[index(i, j, p)];
+    }
+    T* operator()(size_type i, size_type j, placeholder p) noexcept
+    {
+        return &data_[index(i, j, p)];
+    }
+
+    constexpr size_type index(
+        size_type i, size_type j, size_type k
+        ) const noexcept
     {
         return i + nx_ * j + nx_ * ny_ * k;
-    }    
-    size_type index(size_type j, size_type k) const noexcept
+    }
+    constexpr size_type index(
+        placeholder, size_type j, size_type k
+        ) const noexcept
     {
         return nx_ * j + nx_ * ny_ * k;
+    }
+    constexpr size_type index(
+        size_type i, placeholder, size_type k
+        ) const noexcept
+    {
+        return i + nx_ * ny_ * k;
+    }
+    constexpr size_type index(
+        size_type i, size_type j, placeholder
+        ) const noexcept
+    {
+        return i + nx_ * j;
     }    
+
+    constexpr size_type stride_x() const noexcept
+    {
+        return 1;
+    }
+    constexpr size_type stride_y() const noexcept
+    {
+        return nx_;
+    }
+    constexpr size_type stride_z() const noexcept
+    {
+        return nx_ * ny_;
+    }
 
     constexpr size_type nx() const noexcept
     {
@@ -210,43 +327,226 @@ struct array3d
     }
 };
 
-// Solves a one-dimensional diffusion equation using the implicit Backward Time,
-// Centered Space (BTCS) finite difference method. The following problem is
-// solve:
-//
-//     u_t = D * u_zz, z in (0, 1)
-//
-//     u(z, 0) = sin(N * pi * z)
-//     u(0, t) = u(1, t) = 0
-// 
-// This problem has an exact solution:
-//
-//     u(z, t) = e ^ (-D * N^2 * pi^2 * t) * sin(N * pi * z)
-//
+///////////////////////////////////////////////////////////////////////////////
+// dest = src
+
+inline void copy(
+    array3d<double>::size_type j_begin
+  , array3d<double>::size_type j_end
+  , array3d<double>& dest
+  , array3d<double> const& src
+    ) noexcept
+{
+    array3d<double>::size_type const nx = src.nx();
+    array3d<double>::size_type const nz = src.nz();
+
+    __assume(0 == (nx % 8)); 
+
+    assert(dest.nx() == src.nx());
+    assert(dest.ny() == src.ny());
+    assert(dest.nz() == src.nz());
+
+    for (int k = 0; k < nz; ++k)
+        for (int j = j_begin; j < j_end; ++j)
+        {
+            double*       destp = dest(_, j, k);
+            double const* srcp  = src (_, j, k);
+
+            __assume_aligned(destp, 64);
+            __assume_aligned(srcp, 64);
+
+            #pragma simd
+            for (int i = 0; i < nx; ++i)
+                destp[i] = srcp[i];
+        }
+}
+
+inline void copy(array3d<double>& dest, array3d<double> const& src) noexcept
+{
+    copy(0, src.ny(), dest, src);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// r = A*u - r
+
+inline void residual(
+    array3d<double>::size_type j_begin
+  , array3d<double>::size_type j_end
+  , array3d<double>& r       // Residual
+  , array3d<double> const& a // Lower band
+  , array3d<double> const& b // Diagonal
+  , array3d<double> const& c // Upper band
+  , array3d<double> const& u // Solution
+    ) noexcept
+{
+    array3d<double>::size_type const nx = r.nx();
+    array3d<double>::size_type const nz = r.nz();
+
+    __assume(0 == (nx % 8)); 
+
+    assert(r.nx()     == a.nx());
+    assert(r.ny()     == a.ny());
+    assert(r.nz() - 1 == a.nz());
+
+    assert(r.nx()     == b.nx());
+    assert(r.ny()     == b.ny());
+    assert(r.nz()     == b.nz());
+
+    assert(r.nx()     == c.nx());
+    assert(r.ny()     == c.ny());
+    assert(r.nz() - 1 == c.nz());
+
+    assert(r.nx()     == u.nx());
+    assert(r.ny()     == u.ny());
+    assert(r.nz()     == u.nz());
+
+    // First row.
+    for (int j = j_begin; j < j_end; ++j)
+    {
+        double*       r0p = r(_, j, 0);
+
+        double const* b0p = b(_, j, 0);
+
+        double const* c0p = c(_, j, 0);
+
+        double const* u0p = u(_, j, 0);
+        double const* u1p = u(_, j, 1);
+
+        __assume_aligned(r0p, 64);
+
+        __assume_aligned(b0p, 64);
+
+        __assume_aligned(c0p, 64);
+
+        __assume_aligned(u0p, 64);
+        __assume_aligned(u1p, 64);
+
+        #pragma simd
+        for (int i = 0; i < nx; ++i)
+        {
+            // NOTE: The comment is k-indexed. The code is i-indexed.
+            // r[0] = (b[0] * u[0] + c[0] * u[1]) - r[0];
+            r0p[i] = (b0p[i] * u0p[i] + c0p[i] * u1p[i]) - r0p[i];
+        }
+    }
+
+    // Interior rows.
+    for (int k = 1; k < nz - 1; ++k)
+        for (int j = j_begin; j < j_end; ++j)
+        {
+            double*       rp     = r(_, j, k);
+
+            double const* asub1p = a(_, j, k - 1);
+
+            double const* bp     = b(_, j, k);
+
+            double const* cp     = c(_, j, k);
+
+            double const* usub1p = u(_, j, k - 1);
+            double const* up     = u(_, j, k);
+            double const* uadd1p = u(_, j, k + 1);
+
+            __assume_aligned(rp, 64);
+
+            __assume_aligned(asub1p, 64);
+
+            __assume_aligned(bp, 64);
+
+            __assume_aligned(cp, 64);
+
+            __assume_aligned(usub1p, 64);
+            __assume_aligned(up, 64);
+            __assume_aligned(uadd1p, 64);
+
+            #pragma simd
+            for (int i = 0; i < nx; ++i)
+            {
+                // r[k] = ( a[k - 1] * u[k - 1]
+                //        + b[k] * u[k]
+                //        + c[k] * u[k + 1])
+                //      - r[k];
+                rp[i] = ( asub1p[i] * usub1p[i]
+                        + bp[i] * up[i]
+                        + cp[i] * uadd1p[i])
+                      - rp[i];
+            }
+        }
+
+    // Last row.
+    for (int j = j_begin; j < j_end; ++j)
+    {
+        double*       rnz1p = r(_, j, nz - 1);
+
+        double const* anz2p = a(_, j, nz - 2);
+
+        double const* bnz1p = b(_, j, nz - 1);
+
+        double const* unz2p = u(_, j, nz - 2);
+        double const* unz1p = u(_, j, nz - 1);
+
+        __assume_aligned(rnz1p, 64);
+
+        __assume_aligned(anz2p, 64);
+
+        __assume_aligned(bnz1p, 64);
+
+        __assume_aligned(unz2p, 64);
+        __assume_aligned(unz1p, 64);
+
+        #pragma simd
+        for (int i = 0; i < nx; ++i)
+        {
+            // NOTE: The comment is k-indexed. The code is i-indexed.
+            // r[nz - 1] = (a[nz - 2] * u[nz - 2] + b[nz - 1] * u[nz - 1])
+            //           - r[nz - 1];
+            rnz1p[i] = (anz2p[i] * unz2p[i] + bnz1p[i] * unz1p[i])
+                     - rnz1p[i];
+        }
+    }
+}
+
+inline void residual(
+    array3d<double>& r       // Residual
+  , array3d<double> const& a // Lower band
+  , array3d<double> const& b // Diagonal
+  , array3d<double> const& c // Upper band
+  , array3d<double> const& u // Solution
+    ) noexcept
+{
+    residual(0, r.ny(), r, a, b, c, u);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
 struct heat_equation_btcs
 {
-    double D;
-    double N;
+    bool verify;
+    bool header;
 
-    std::size_t nx;
-    std::size_t ny;
-    std::size_t nz;
-    std::size_t ns;
-    double nt;
+    double D;
+
+    std::uint64_t nx;
+    std::uint64_t ny;
+    std::uint64_t nz;
+    std::uint64_t tw;
+
+    std::uint64_t ns;
+    double dt;
 
   private:
     double dz;
-    double dt;
 
-    double r;
+    static double constexpr N = 1.0;
+
+    double A_coef;
 
     array3d<double> a;
     array3d<double> b;
     array3d<double> c;
 
-    array3d<double> u;    
+    array3d<double> u;
 
-    array3d<double> error;
+    array3d<double> r;
 
     std::vector<double> a_buf;
     std::vector<double> b_buf;
@@ -255,25 +555,34 @@ struct heat_equation_btcs
     std::vector<double> u_buf;
 
   public:
-    heat_equation_btcs()
+    heat_equation_btcs() noexcept
     {
+        verify = get_env_variable<bool>("verify", false);
+        header = get_env_variable<bool>("header", false);
+
         D  = get_env_variable<double>("D", 0.1);
-        N  = get_env_variable<double>("N", 1.0);
-        nx = get_env_variable<std::size_t>("nx", 128);
-        ny = get_env_variable<std::size_t>("ny", 128);
-        nz = get_env_variable<std::size_t>("nz", 32);
-        ns = get_env_variable<std::size_t>("ns", 200);
-        nt = get_env_variable<double>("nt", 0.002);
+
+        nx = get_env_variable<std::uint64_t>("nx", 32);
+        ny = get_env_variable<std::uint64_t>("ny", 2048);
+        nz = get_env_variable<std::uint64_t>("nz", 32);
+        tw = get_env_variable<std::uint64_t>("tw", 16);
+
+        ns = get_env_variable<std::uint64_t>("ns", 50);
+        dt = get_env_variable<double>("dt", 1.0e-7);
+
+        assert(0 == (nx % 8)); // Ensure 64-byte alignment.
+        assert(8 <= nx); 
+
+        assert(0 == (ny % tw));
     }
 
-    void initialize()
+    void initialize() noexcept 
     { 
-        // Compute time-step size and grid spacing.
+        // Compute grid spacing.
         dz = 1.0 / (nz - 1);
-        dt = nt / ns;
 
         // Compute matrix constant.
-        r = D * dt / (dz * dz);
+        A_coef = D * dt / (dz * dz);
 
         // Allocate storage for the matrix.
         a.resize(nx, ny, nz - 1);
@@ -282,50 +591,69 @@ struct heat_equation_btcs
 
         // Allocate storage for the problem state and initialize it.
         u.resize(nx, ny, nz);
+
+        __assume(0 == (nx % 8));
+
         for (int k = 0; k < nz; ++k)
             for (int j = 0; j < ny; ++j)
             {
                 double* up = u(_, j, k);
+
+                __assume_aligned(up, 64);
+
+                #pragma simd
                 for (int i = 0; i < nx; ++i)
                     up[i] = std::sin(N * M_PI * (dz * k));
             }
 
-        // Allocate storage for storing error calculations.
-        error.resize(nx, ny, nz);
+        // Allocate storage for the residual.
+        r.resize(nx, ny, nz);
 
-        // Allocate storage for the matrix gather buffers.
+        // Allocate storage for gather buffers.
         a_buf.resize(nz - 1);
         b_buf.resize(nz);
         c_buf.resize(nz - 1);
-
-        // Allocate storage for the problem state gather buffers.
         u_buf.resize(nz);
     }
 
-    void build_matrix()
+    void build_matrix(std::ptrdiff_t j_begin, std::ptrdiff_t j_end) noexcept
     {
+        double const ac_term = -A_coef;
+        double const b_term  = 1.0 + 2.0 * A_coef;
+
+        __assume(0 == (nx % 8)); 
+ 
         for (int k = 0; k < nz; ++k)
-            for (int j = 0; j < ny; ++j)
+            for (int j = j_begin; j < j_end; ++j)
             {
                 double* bp = b(_, j, k);
+
+                __assume_aligned(bp, 64);
+
+                #pragma simd
                 for (int i = 0; i < nx; ++i)
-                    bp[i] = 1.0 + 2.0 * r;
+                    bp[i] = b_term;
             }
 
         for (int k = 0; k < nz - 1; ++k)
-            for (int j = 0; j < ny; ++j)
+            for (int j = j_begin; j < j_end; ++j)
             {
                 double* ap = a(_, j, k);
                 double* cp = c(_, j, k);
+
+                __assume_aligned(ap, 64);
+                __assume_aligned(cp, 64);
+
+                #pragma simd
                 for (int i = 0; i < nx; ++i)
                 {
-                    ap[i] = -r;
-                    cp[i] = -r;
+                    ap[i] = ac_term;
+                    cp[i] = ac_term;
                 }
             }
 
         // Boundary conditions.
-        for (int j = 0; j < ny; ++j)
+        for (int j = j_begin; j < j_end; ++j)
         {
             double* bbeginp = b(_, j, 0);
             double* cbeginp = c(_, j, 0);
@@ -333,12 +661,104 @@ struct heat_equation_btcs
             double* aendp   = a(_, j, nz - 2);
             double* bendp   = b(_, j, nz - 1);
 
+            __assume_aligned(bbeginp, 64);
+            __assume_aligned(cbeginp, 64);
+
+            __assume_aligned(aendp, 64);
+            __assume_aligned(bendp, 64);
+
+            #pragma simd
             for (int i = 0; i < nx; ++i)
             {
                 bbeginp[i] = 1.0; cbeginp[i] = 0.0;
                 aendp[i]   = 0.0; bendp[i]   = 1.0;
             }
         }
+    }
+
+    double l2_norm(std::uint64_t step) noexcept
+    {
+        double l2 = 0.0;
+
+        for (int j = 0; j < ny; ++j)
+            for (int i = 0; i < nx; ++i)
+            {
+                double sum = 0.0;
+
+                double const* up = u(i, j, _);
+
+                array3d<double>::size_type const stride = u.stride_z();
+
+                __assume_aligned(up, 64);
+
+                // NOTE: Strided access.
+                #pragma simd
+                for (int k = 0; k < nz; ++k)
+                {
+                    array3d<double>::size_type const ks = k * stride;
+
+                    double const exact = std::exp( -D * (N * N)
+                                                 * (M_PI * M_PI) * (dt * step))
+                                       * std::sin(N * M_PI * (dz * k)); 
+
+                    double const abs_term = std::fabs(up[ks] - exact);
+                    sum = sum + abs_term * abs_term;
+                }
+
+                double const l2_here = std::sqrt(sum);
+
+                if ((0 == i) && (0 == j))
+                    // First iteration, so we have nothing to compare against.
+                    l2 = l2_here;
+                else
+                    // All the columns are the same, so the L2 norm for each
+                    // column should be the same.
+                    assert(fp_equals(l2, l2_here));
+            }
+
+        return l2;
+    }
+
+    double max_residual() noexcept
+    {
+        residual(r, a, b, c, u);
+
+        double mr = 0.0; 
+
+        for (int j = 0; j < ny; ++j)
+            for (int i = 0; i < nx; ++i)
+            {
+                double min = 1.0e300;
+                double max = -1.0e300;
+
+                double const* rp = r(i, j, _);
+
+                array3d<double>::size_type const stride = r.stride_z();
+
+                __assume_aligned(rp, 64);
+
+                // NOTE: Strided access.
+                #pragma simd
+                for (int k = 0; k < nz; ++k)
+                {
+                    array3d<double>::size_type const ks = k * stride;
+
+                    min = std::min(min, rp[ks]);
+                    max = std::max(max, rp[ks]);
+                }
+
+                double const mr_here = std::max(std::fabs(min), std::fabs(max));
+
+                if ((0 == i) && (0 == j))
+                    // First iteration, so we have nothing to compare against.
+                    mr = mr_here;
+                else
+                    // All the columns are the same, so the max residual for
+                    // each column should be the same.
+                    assert(fp_equals(mr, mr_here));
+            }
+
+        return mr;
     }
 
     void solve()
@@ -349,21 +769,52 @@ struct heat_equation_btcs
 
         for (int s = 0; s < ns; ++s)
         {
-            build_matrix();
+            if (verify)
+                copy(r, u);
+
+            for (int j = 0; j < ny; j += tw)
+            {
+                std::ptrdiff_t j_begin = j;
+                std::ptrdiff_t j_end   = j + tw;
+
+                build_matrix(j_begin, j_end);
+            }
 
             for (int j = 0; j < ny; ++j)
                 for (int i = 0; i < nx; ++i)
                 {
-                    for (int k = 0; k < nz; ++k)
-                    {
-                        b_buf[k] = b(i, j, k);
-                        u_buf[k] = u(i, j, k);
-                    }
+                    array3d<double>::size_type const stride = u.stride_z();
 
+                    double* ap = a(i, j, _); 
+                    double* cp = c(i, j, _); 
+
+                    __assume_aligned(ap, 64);
+                    __assume_aligned(cp, 64);
+
+                    // NOTE: Strided access.
+                    #pragma simd
                     for (int k = 0; k < nz - 1; ++k)
                     {
-                        a_buf[k] = a(i, j, k);
-                        c_buf[k] = c(i, j, k);
+                        array3d<double>::size_type const ks = k * stride;
+
+                        a_buf[k] = ap[ks];
+                        c_buf[k] = cp[ks];
+                    }
+
+                    double* bp = b(i, j, _); 
+                    double* up = u(i, j, _); 
+
+                    __assume_aligned(bp, 64);
+                    __assume_aligned(up, 64);
+
+                    // NOTE: Strided access.
+                    #pragma simd
+                    for (int k = 0; k < nz; ++k)
+                    {
+                        array3d<double>::size_type const ks = k * stride;
+
+                        b_buf[k] = bp[ks];
+                        u_buf[k] = up[ks];
                     }
 
                     int mkl_n    = nz;
@@ -372,53 +823,89 @@ struct heat_equation_btcs
                     int mkl_info = 0;
 
                     dgtsv_(
-                        &mkl_n,       // matrix order
-                        &mkl_nrhs,    // # of right hand sides 
-                        a_buf.data(), // subdiagonal part
-                        b_buf.data(), // diagonal part
-                        c_buf.data(), // superdiagonal part
-                        u_buf.data(), // column to solve 
-                        &mkl_ldb,     // leading dimension of RHS
+                        &mkl_n,       // Matrix order.
+                        &mkl_nrhs,    // # of right hand sides.
+                        a_buf.data(), // Subdiagonal part.
+                        b_buf.data(), // Diagonal part.
+                        c_buf.data(), // Superdiagonal part.
+                        u_buf.data(), // Column to solve.
+                        &mkl_ldb,     // Leading dimension of RHS.
                         &mkl_info
                         );
 
                     assert(mkl_info == 0);
 
+                    // NOTE: Strided access.
+                    #pragma simd
                     for (int k = 0; k < nz; ++k)
-                        u(i, j, k) = u_buf[k];
+                    {
+                        array3d<double>::size_type const ks = k * stride;
+
+                        up[ks] = u_buf[k];
+                    }
                 }
+
+            if (verify)
+            {
+                for (int j = 0; j < ny; j += tw)
+                {
+                    std::ptrdiff_t j_begin = j;
+                    std::ptrdiff_t j_end   = j + tw;
+
+                    build_matrix(j_begin, j_end);
+                }
+
+                double const resid = max_residual();
+
+                double const l2 = l2_norm(s + 1);
+
+                std::printf(
+                    "STEP %04u : "
+                    "TIME %-10.7g = %-10.7g + %-10.7g : "
+                    "L2 NORM %-22.17g : "
+                    "MAX RESIDUAL %-22.17g\n"
+                  , s
+                  , dt * (s + 1)
+                  , dt * s
+                  , dt
+                  , l2
+                  , resid
+                );
+            }
         }
 
         double const walltime = t.elapsed();
 
-        for (int k = 0; k < nz; ++k)
-            for (int j = 0; j < ny; ++j)
-            {
-                double* up     = u(_, j, k);
-                double* errorp = error(_, j, k);
-                for (int i = 0; i < nx; ++i)
-                {
-                    double exact = std::exp( -D * (N * N)
-                                           * (M_PI * M_PI) * (dt * ns))
-                                 * std::sin(N * M_PI * (dz * k)); 
+        double const l2 = l2_norm(ns);  
 
-                    errorp[i] = (up[i] - exact); 
-                }
-            }
-
-        double sum = 0.0;
-
-        for (int k = 0; k < nz; ++k)
-        {
-            double const abs_term = std::fabs(error(0, 0, k));
-            sum = sum + abs_term * abs_term;
-        }
-
-        double const l2_norm = std::sqrt(sum);
+        if (header)
+            std::cout <<
+                "Algorithm,"
+                "Build Type,"
+                "Diffusion Coefficient (D),"
+                "X (Horizontal) Extent (nx),"
+                "Y (Horizontal) Extent (ny),"
+                "Z (Horizontal) Extent (nz),"
+                "Tile Width (tw),"
+                "# of Timesteps (ns),"
+                "Timestep Size (dt),"
+                "Walltime [s],"
+                "L2 Norm"
+                ;
 
         std::cout
-            << "WALLTIME : " << std::setprecision(7) << walltime << " [s]\n"
-            << "L2 NORM  : " << std::setprecision(17) << l2_norm << "\n";
+            << "MKL Bulk Build Noncontigous Z,"
+            << BUILD_TYPE << ","
+            << D << ","
+            << nx << ","
+            << ny << ","
+            << nz << ","
+            << tw << ","
+            << ns << ","
+            << dt << ","
+            << std::setprecision(7) << walltime << ","
+            << std::setprecision(17) << l2 << "\n"
+            ;
     }
 };
 
@@ -427,8 +914,6 @@ int main()
     feenableexcept(FE_DIVBYZERO);
     feenableexcept(FE_INVALID);
     feenableexcept(FE_OVERFLOW);
-
-    std::cout << "SOLVER   : MKL BATCHED NONCONTIGUOUS Z\n";
 
     heat_equation_btcs s;
 

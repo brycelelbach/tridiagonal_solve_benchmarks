@@ -69,6 +69,8 @@ struct high_resolution_timer
     std::uint64_t start_time_;
 };
 
+///////////////////////////////////////////////////////////////////////////////
+
 template <typename T>
 T get_env_variable(std::string const& var, T default_val); 
 
@@ -147,6 +149,8 @@ double get_env_variable(std::string const& var, double default_val)
     return r;
 }
 
+///////////////////////////////////////////////////////////////////////////////
+
 template <
     typename T
   , typename = typename std::enable_if<std::is_floating_point<T>::value>::type
@@ -160,9 +164,11 @@ constexpr bool fp_equals(
            : false);
 }
 
+///////////////////////////////////////////////////////////////////////////////
+
 struct placeholder {};
 
-constexpr placeholder _{};
+constexpr placeholder _ {};
 
 template <typename T, std::uint64_t Alignment = 64>
 struct array3d
@@ -247,6 +253,15 @@ struct array3d
         return &data_[index(p, j, k)];
     }
 
+    T const* operator()(size_type i, placeholder p, size_type k) const noexcept
+    {
+        return &data_[index(i, p, k)];
+    }
+    T* operator()(size_type i, placeholder p, size_type k) noexcept
+    {
+        return &data_[index(i, p, k)];
+    }
+
     T const* operator()(size_type i, size_type j, placeholder p) const noexcept
     {
         return &data_[index(i, j, p)];
@@ -267,6 +282,12 @@ struct array3d
         ) const noexcept
     {
         return nx_ * j + nx_ * ny_ * k;
+    }
+    constexpr size_type index(
+        size_type i, placeholder, size_type k
+        ) const noexcept
+    {
+        return i + nx_ * ny_ * k;
     }
     constexpr size_type index(
         size_type i, size_type j, placeholder
@@ -696,10 +717,17 @@ struct heat_equation_btcs
 
         // Allocate storage for the problem state and initialize it.
         u.resize(nx, ny, nz);
+
+        __assume(0 == (nx % 8));
+
         for (int k = 0; k < nz; ++k)
             for (int j = 0; j < ny; ++j)
             {
                 double* up = u(_, j, k);
+
+                __assume_aligned(up, 64);
+
+                #pragma simd
                 for (int i = 0; i < nx; ++i)
                     up[i] = std::sin(N * M_PI * (dz * k));
             }
@@ -768,9 +796,9 @@ struct heat_equation_btcs
         }
     }
 
-    double l2_norm(std::uint64_t step)
+    double l2_norm(std::uint64_t step) noexcept
     {
-        double e = 0.0;
+        double l2 = 0.0;
 
         for (int j = 0; j < ny; ++j)
             for (int i = 0; i < nx; ++i)
@@ -783,32 +811,35 @@ struct heat_equation_btcs
 
                 __assume_aligned(up, 64);
 
+                // NOTE: Strided access.
                 #pragma simd
                 for (int k = 0; k < nz; ++k)
                 {
-                    double exact = std::exp( -D * (N * N)
-                                           * (M_PI * M_PI) * (dt * step))
-                                 * std::sin(N * M_PI * (dz * k)); 
+                    array3d<double>::size_type const ks = k * stride;
 
-                    double const abs_term = std::fabs(up[k * stride] - exact);
+                    double const exact = std::exp( -D * (N * N)
+                                                 * (M_PI * M_PI) * (dt * step))
+                                       * std::sin(N * M_PI * (dz * k)); 
+
+                    double const abs_term = std::fabs(up[ks] - exact);
                     sum = sum + abs_term * abs_term;
                 }
 
-                double const e_here = std::sqrt(sum);
+                double const l2_here = std::sqrt(sum);
 
                 if ((0 == i) && (0 == j))
                     // First iteration, so we have nothing to compare against.
-                    e = e_here;
+                    l2 = l2_here;
                 else
                     // All the columns are the same, so the L2 norm for each
                     // column should be the same.
-                    assert(fp_equals(e, e_here));
+                    assert(fp_equals(l2, l2_here));
             }
 
-        return e;
+        return l2;
     }
 
-    double max_residual()
+    double max_residual() noexcept
     {
         residual(r, a, b, c, u);
 
@@ -820,10 +851,20 @@ struct heat_equation_btcs
                 double min = 1.0e300;
                 double max = -1.0e300;
 
+                double const* rp = r(i, j, _);
+
+                array3d<double>::size_type const stride = r.stride_z();
+
+                __assume_aligned(rp, 64);
+
+                // NOTE: Strided access.
+                #pragma simd
                 for (int k = 0; k < nz; ++k)
                 {
-                    min = std::min(min, r(i, j, k));
-                    max = std::max(max, r(i, j, k));
+                    array3d<double>::size_type const ks = k * stride;
+
+                    min = std::min(min, rp[ks]);
+                    max = std::max(max, rp[ks]);
                 }
 
                 double const mr_here = std::max(std::fabs(min), std::fabs(max));
@@ -863,6 +904,14 @@ struct heat_equation_btcs
 
             if (verify)
             {
+                for (int j = 0; j < ny; j += tw)
+                {
+                    std::ptrdiff_t j_begin = j;
+                    std::ptrdiff_t j_end   = j + tw;
+
+                    build_matrix(j_begin, j_end);
+                }
+
                 double const resid = max_residual();
 
                 double const l2 = l2_norm(s + 1);  
