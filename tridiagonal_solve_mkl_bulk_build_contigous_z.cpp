@@ -18,121 +18,20 @@
 //
 //     u(z, t) = e ^ (-D * N^2 * pi^2 * t) * sin(N * pi * z)
 
-#include <iostream>
-#include <sstream>
 #include <iomanip>
 #include <algorithm>
-#include <chrono>
-#include <type_traits>
 
 #include <cmath>
 #include <cfenv>
-#include <cstring>
 #include <cassert>
-#include <climits>
 #include <cstdio>
-#include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 
 #include <mkl.h>
 
 #include "high_resolution_timer.hpp"
-
-///////////////////////////////////////////////////////////////////////////////
-
-template <typename T>
-T get_env_variable(std::string const& var, T default_val); 
-
-template <>
-bool get_env_variable(std::string const& var, bool default_val) 
-{
-    char const* const env_str_p(std::getenv(var.c_str()));
-
-    if (nullptr == env_str_p)
-        return default_val;
-
-    std::string const env_str(env_str_p);
-
-    char* env_str_p_end(nullptr);
-
-    std::uint64_t const r = std::strtoul(env_str.c_str(), &env_str_p_end, 10);
-
-    if ((&env_str.back() != env_str_p_end - 1) || ULONG_MAX == r)
-    {
-        std::cout << "ERROR: invalid value '" << env_str << "' "
-                     "for boolean environment variable '" << var << "'"
-                     "\n";
-        std::exit(1);
-    }
-
-    return bool(r);
-}
-
-template <>
-std::uint64_t get_env_variable(std::string const& var, std::uint64_t default_val) 
-{
-    char const* const env_str_p(std::getenv(var.c_str()));
-
-    if (nullptr == env_str_p)
-        return default_val;
-
-    std::string const env_str(env_str_p);
-
-    char* env_str_p_end(nullptr);
-
-    std::uint64_t const r = std::strtoul(env_str.c_str(), &env_str_p_end, 10);
-
-    if ((&env_str.back() != env_str_p_end - 1) || ULONG_MAX == r)
-    {
-        std::cout << "ERROR: invalid value '" << env_str << "' "
-                     "for integer environment variable '" << var << "'"
-                     "\n";
-        std::exit(1);
-    }
-
-    return r;
-}
-
-template <>
-double get_env_variable(std::string const& var, double default_val) 
-{
-    char const* const env_str_p(std::getenv(var.c_str()));
-
-    if (nullptr == env_str_p)
-        return default_val;
-
-    std::string const env_str(env_str_p);
-
-    char* env_str_p_end(nullptr);
-
-    double const r = std::strtod(env_str.c_str(), &env_str_p_end);
-
-    if ((&env_str.back() != env_str_p_end - 1) || HUGE_VAL == r)
-    {
-        std::cout << "ERROR: invalid value '" << env_str << "' "
-                     "for floating point environment variable '" << var << "'"
-                     "\n";
-        std::exit(1);
-    }
-
-    return r;
-}
-
-///////////////////////////////////////////////////////////////////////////////
-
-template <
-    typename T
-  , typename = typename std::enable_if<std::is_floating_point<T>::value>::type
-    >
-constexpr bool fp_equals(
-    T x, T y, T epsilon = std::numeric_limits<T>::epsilon()
-    ) noexcept
-{
-    return ( ((x + epsilon >= y) && (x - epsilon <= y))
-           ? true
-           : false);
-}
+#include "get_env_variable.hpp"
+#include "fp_utils.hpp"
 
 ///////////////////////////////////////////////////////////////////////////////
 
