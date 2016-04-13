@@ -35,39 +35,7 @@
 #include <cstdint>
 #include <cstdlib>
 
-// FIXME: Some of these can be noexcept/constexpr
-
-struct high_resolution_timer
-{
-    high_resolution_timer()
-      : start_time_(take_time_stamp())
-    {}
-
-    void restart()
-    {
-        start_time_ = take_time_stamp();
-    }
-
-    double elapsed() const // Return elapsed time in seconds.
-    {
-        return double(take_time_stamp() - start_time_) * 1e-9;
-    }
-
-    std::uint64_t elapsed_nanoseconds() const
-    {
-        return take_time_stamp() - start_time_;
-    }
-
-  protected:
-    static std::uint64_t take_time_stamp()
-    {
-        return std::chrono::duration_cast<std::chrono::nanoseconds>
-            (std::chrono::steady_clock::now().time_since_epoch()).count();
-    }
-
-  private:
-    std::uint64_t start_time_;
-};
+#include "high_resolution_timer.hpp"
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -860,7 +828,9 @@ struct heat_equation_btcs
         initialize();
 
         high_resolution_timer t;
-
+   
+        double solvertime = 0.0;
+ 
         for (int s = 0; s < ns; ++s)
         {
             if (verify)
@@ -873,7 +843,11 @@ struct heat_equation_btcs
 
                 build_matrix(j_begin, j_end);
 
+                high_resolution_timer st;
+
                 tridiagonal_solve_native(j_begin, j_end, a, b, c, u);
+
+                solvertime += st.elapsed();
             }
 
             if (verify)
@@ -920,7 +894,8 @@ struct heat_equation_btcs
                 "Tile Width (tw),"
                 "# of Timesteps (ns),"
                 "Timestep Size (dt),"
-                "Walltime [s],"
+                "Wall Time [s],"
+                "Solver Time [s],"
                 "L2 Norm"
                 ;
 
@@ -935,6 +910,7 @@ struct heat_equation_btcs
             << ns << ","
             << dt << ","
             << std::setprecision(7) << walltime << ","
+            << std::setprecision(7) << solvertime << ","
             << std::setprecision(17) << l2 << "\n"
             ;
     }

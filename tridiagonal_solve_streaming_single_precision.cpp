@@ -22,7 +22,6 @@
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
-#include <chrono>
 #include <type_traits>
 
 #include <cmath>
@@ -93,7 +92,7 @@ std::uint64_t get_env_variable(std::string const& var, std::uint64_t default_val
 }
 
 template <>
-double get_env_variable(std::string const& var, double default_val) 
+float get_env_variable(std::string const& var, float default_val) 
 {
     char const* const env_str_p(std::getenv(var.c_str()));
 
@@ -104,9 +103,9 @@ double get_env_variable(std::string const& var, double default_val)
 
     char* env_str_p_end(nullptr);
 
-    double const r = std::strtod(env_str.c_str(), &env_str_p_end);
+    float const r = std::strtof(env_str.c_str(), &env_str_p_end);
 
-    if ((&env_str.back() != env_str_p_end - 1) || HUGE_VAL == r)
+    if ((&env_str.back() != env_str_p_end - 1) || HUGE_VALF == r)
     {
         std::cout << "ERROR: invalid value '" << env_str << "' "
                      "for floating point environment variable '" << var << "'"
@@ -295,14 +294,14 @@ struct array3d
 // dest = src
 
 inline void copy(
-    array3d<double>::size_type j_begin
-  , array3d<double>::size_type j_end
-  , array3d<double>& dest
-  , array3d<double> const& src
+    array3d<float>::size_type j_begin
+  , array3d<float>::size_type j_end
+  , array3d<float>& dest
+  , array3d<float> const& src
     ) noexcept
 {
-    array3d<double>::size_type const nx = src.nx();
-    array3d<double>::size_type const nz = src.nz();
+    array3d<float>::size_type const nx = src.nx();
+    array3d<float>::size_type const nz = src.nz();
 
     __assume(0 == (nx % 8)); 
 
@@ -313,8 +312,8 @@ inline void copy(
     for (int k = 0; k < nz; ++k)
         for (int j = j_begin; j < j_end; ++j)
         {
-            double*       destp = dest(_, j, k);
-            double const* srcp  = src (_, j, k);
+            float*       destp = dest(_, j, k);
+            float const* srcp  = src (_, j, k);
 
             __assume_aligned(destp, 64);
             __assume_aligned(srcp, 64);
@@ -325,7 +324,7 @@ inline void copy(
         }
 }
 
-inline void copy(array3d<double>& dest, array3d<double> const& src) noexcept
+inline void copy(array3d<float>& dest, array3d<float> const& src) noexcept
 {
     copy(0, src.ny(), dest, src);
 }
@@ -334,17 +333,17 @@ inline void copy(array3d<double>& dest, array3d<double> const& src) noexcept
 // r = A*u - r
 
 inline void residual(
-    array3d<double>::size_type j_begin
-  , array3d<double>::size_type j_end
-  , array3d<double>& r       // Residual
-  , array3d<double> const& a // Lower band
-  , array3d<double> const& b // Diagonal
-  , array3d<double> const& c // Upper band
-  , array3d<double> const& u // Solution
+    array3d<float>::size_type j_begin
+  , array3d<float>::size_type j_end
+  , array3d<float>& r       // Residual
+  , array3d<float> const& a // Lower band
+  , array3d<float> const& b // Diagonal
+  , array3d<float> const& c // Upper band
+  , array3d<float> const& u // Solution
     ) noexcept
 {
-    array3d<double>::size_type const nx = r.nx();
-    array3d<double>::size_type const nz = r.nz();
+    array3d<float>::size_type const nx = r.nx();
+    array3d<float>::size_type const nz = r.nz();
 
     __assume(0 == (nx % 8)); 
 
@@ -367,14 +366,14 @@ inline void residual(
     // First row.
     for (int j = j_begin; j < j_end; ++j)
     {
-        double*       r0p = r(_, j, 0);
+        float*       r0p = r(_, j, 0);
 
-        double const* b0p = b(_, j, 0);
+        float const* b0p = b(_, j, 0);
 
-        double const* c0p = c(_, j, 0);
+        float const* c0p = c(_, j, 0);
 
-        double const* u0p = u(_, j, 0);
-        double const* u1p = u(_, j, 1);
+        float const* u0p = u(_, j, 0);
+        float const* u1p = u(_, j, 1);
 
         __assume_aligned(r0p, 64);
 
@@ -398,17 +397,17 @@ inline void residual(
     for (int k = 1; k < nz - 1; ++k)
         for (int j = j_begin; j < j_end; ++j)
         {
-            double*       rp     = r(_, j, k);
+            float*       rp     = r(_, j, k);
 
-            double const* asub1p = a(_, j, k - 1);
+            float const* asub1p = a(_, j, k - 1);
 
-            double const* bp     = b(_, j, k);
+            float const* bp     = b(_, j, k);
 
-            double const* cp     = c(_, j, k);
+            float const* cp     = c(_, j, k);
 
-            double const* usub1p = u(_, j, k - 1);
-            double const* up     = u(_, j, k);
-            double const* uadd1p = u(_, j, k + 1);
+            float const* usub1p = u(_, j, k - 1);
+            float const* up     = u(_, j, k);
+            float const* uadd1p = u(_, j, k + 1);
 
             __assume_aligned(rp, 64);
 
@@ -439,14 +438,14 @@ inline void residual(
     // Last row.
     for (int j = j_begin; j < j_end; ++j)
     {
-        double*       rnz1p = r(_, j, nz - 1);
+        float*       rnz1p = r(_, j, nz - 1);
 
-        double const* anz2p = a(_, j, nz - 2);
+        float const* anz2p = a(_, j, nz - 2);
 
-        double const* bnz1p = b(_, j, nz - 1);
+        float const* bnz1p = b(_, j, nz - 1);
 
-        double const* unz2p = u(_, j, nz - 2);
-        double const* unz1p = u(_, j, nz - 1);
+        float const* unz2p = u(_, j, nz - 2);
+        float const* unz1p = u(_, j, nz - 1);
 
         __assume_aligned(rnz1p, 64);
 
@@ -470,11 +469,11 @@ inline void residual(
 }
 
 inline void residual(
-    array3d<double>& r       // Residual
-  , array3d<double> const& a // Lower band
-  , array3d<double> const& b // Diagonal
-  , array3d<double> const& c // Upper band
-  , array3d<double> const& u // Solution
+    array3d<float>& r       // Residual
+  , array3d<float> const& a // Lower band
+  , array3d<float> const& b // Diagonal
+  , array3d<float> const& c // Upper band
+  , array3d<float> const& u // Solution
     ) noexcept
 {
     residual(0, r.ny(), r, a, b, c, u);
@@ -484,16 +483,16 @@ inline void residual(
 // A*x = u; u = x
 
 inline void tridiagonal_solve_native(
-    array3d<double>::size_type j_begin
-  , array3d<double>::size_type j_end
-  , array3d<double>& a    // Lower band
-  , array3d<double>& b    // Diagonal
-  , array3d<double>& c    // Upper band
-  , array3d<double>& u    // Solution
+    array3d<float>::size_type j_begin
+  , array3d<float>::size_type j_end
+  , array3d<float>& a    // Lower band
+  , array3d<float>& b    // Diagonal
+  , array3d<float>& c    // Upper band
+  , array3d<float>& u    // Solution
     ) noexcept
 {
-    array3d<double>::size_type const nx = u.nx();
-    array3d<double>::size_type const nz = u.nz();
+    array3d<float>::size_type const nx = u.nx();
+    array3d<float>::size_type const nz = u.nz();
 
     __assume(0 == (nx % 8)); 
 
@@ -513,15 +512,15 @@ inline void tridiagonal_solve_native(
     for (int k = 1; k < nz; ++k)
         for (int j = j_begin; j < j_end; ++j)
         {
-            double* asub1p = a(_, j, k - 1);
+            float* asub1p = a(_, j, k - 1);
 
-            double* bp     = b(_, j, k);
-            double* bsub1p = b(_, j, k - 1);
+            float* bp     = b(_, j, k);
+            float* bsub1p = b(_, j, k - 1);
 
-            double* csub1p = c(_, j, k - 1);
+            float* csub1p = c(_, j, k - 1);
 
-            double* up     = u(_, j, k);
-            double* usub1p = u(_, j, k - 1);
+            float* up     = u(_, j, k);
+            float* usub1p = u(_, j, k - 1);
 
             __assume_aligned(asub1p, 64);
 
@@ -536,26 +535,20 @@ inline void tridiagonal_solve_native(
             #pragma simd
             for (int i = 0; i < nx; ++i)
             {
-                // double const m = a[k - 1] / b[k - 1];
-
-                // Numerator
-                float num0 = asub1p[i];
-
-                // Denominator
-                float const den0 = bsub1p[i];
-
-                double const m0 = num0 / den0;
-
-                bp[i] -= m0 * csub1p[i];
-                up[i] -= m0 * usub1p[i];
+                // float const m = a[k - 1] / b[k - 1];
+                float const m = asub1p[i] / bsub1p[i];
+                // b[k] -= m * c[k - 1];
+                bp[i] -= m * csub1p[i];
+                // u[k] -= m * u[k - 1];
+                up[i] -= m * usub1p[i];
             }
         }
 
     for (int j = j_begin; j < j_end; ++j)
     {
-        double* bendp = b(_, j, nz - 1);
+        float* bendp = b(_, j, nz - 1);
 
-        double* uendp = u(_, j, nz - 1);
+        float* uendp = u(_, j, nz - 1);
 
         __assume_aligned(bendp, 64);
 
@@ -565,14 +558,7 @@ inline void tridiagonal_solve_native(
         for (int i = 0; i < nx; ++i)
         {
             // u[nz - 1] = u[nz - 1] / b[nz - 1];
-
-            // Numerator
-            float num0 = uendp[i];
-
-            // Denominator
-            float const den0 = bendp[i];
-
-            uendp[i] = num0 / den0;
+            uendp[i] = uendp[i] / bendp[i];
         }
     }
  
@@ -580,12 +566,12 @@ inline void tridiagonal_solve_native(
     for (int k = nz - 2; k >= 0; --k)
         for (int j = j_begin; j < j_end; ++j)
         {
-            double* bp     = b(_, j, k);
+            float* bp     = b(_, j, k);
 
-            double* cp     = c(_, j, k);
+            float* cp     = c(_, j, k);
 
-            double* up     = u(_, j, k);
-            double* uadd1p = u(_, j, k + 1);
+            float* up     = u(_, j, k);
+            float* uadd1p = u(_, j, k + 1);
 
             __assume_aligned(bp, 64);
 
@@ -598,14 +584,7 @@ inline void tridiagonal_solve_native(
             for (int i = 0; i < nx; ++i)
             {
                 // u[k] = (u[k] - c[k] * u[k + 1]) / b[k];
-
-                // Numerator
-                float num0 = (up[i] - cp[i] * uadd1p[i]);
-
-                // Denominator
-                float const den0 = bp[i];
-
-                up[i] = num0 / den0;
+                up[i] = (up[i] - cp[i] * uadd1p[i]) / bp[i];
             }
         }
 }
@@ -617,7 +596,7 @@ struct heat_equation_btcs
     bool verify;
     bool header;
 
-    double D;
+    float D;
 
     std::uint64_t nx;
     std::uint64_t ny;
@@ -625,22 +604,22 @@ struct heat_equation_btcs
     std::uint64_t tw;
 
     std::uint64_t ns;
-    double dt;
+    float dt;
 
   private:
-    double dz;
+    float dz;
 
-    static double constexpr N = 1.0;
+    static float constexpr N = 1.0;
 
-    double A_coef;
+    float A_coef;
 
-    array3d<double> a;
-    array3d<double> b;
-    array3d<double> c;
+    array3d<float> a;
+    array3d<float> b;
+    array3d<float> c;
 
-    array3d<double> u;
+    array3d<float> u;
 
-    array3d<double> r;
+    array3d<float> r;
 
   public:
     heat_equation_btcs() noexcept
@@ -648,7 +627,7 @@ struct heat_equation_btcs
         verify = get_env_variable<bool>("verify", false);
         header = get_env_variable<bool>("header", false);
 
-        D  = get_env_variable<double>("D", 0.1);
+        D  = get_env_variable<float>("D", 0.1);
 
         nx = get_env_variable<std::uint64_t>("nx", 32);
         ny = get_env_variable<std::uint64_t>("ny", 2048);
@@ -656,7 +635,7 @@ struct heat_equation_btcs
         tw = get_env_variable<std::uint64_t>("tw", 16);
 
         ns = get_env_variable<std::uint64_t>("ns", 50);
-        dt = get_env_variable<double>("dt", 1.0e-7);
+        dt = get_env_variable<float>("dt", 1.0e-7);
 
         assert(0 == (nx % 8)); // Ensure 64-byte alignment.
         assert(8 <= nx); 
@@ -685,7 +664,7 @@ struct heat_equation_btcs
         for (int k = 0; k < nz; ++k)
             for (int j = 0; j < ny; ++j)
             {
-                double* up = u(_, j, k);
+                float* up = u(_, j, k);
 
                 __assume_aligned(up, 64);
 
@@ -700,15 +679,15 @@ struct heat_equation_btcs
 
     void build_matrix(std::ptrdiff_t j_begin, std::ptrdiff_t j_end) noexcept
     {
-        double const ac_term = -A_coef;
-        double const b_term  = 1.0 + 2.0 * A_coef;
+        float const ac_term = -A_coef;
+        float const b_term  = 1.0 + 2.0 * A_coef;
 
         __assume(0 == (nx % 8)); 
  
         for (int k = 0; k < nz; ++k)
             for (int j = j_begin; j < j_end; ++j)
             {
-                double* bp = b(_, j, k);
+                float* bp = b(_, j, k);
 
                 __assume_aligned(bp, 64);
 
@@ -720,8 +699,8 @@ struct heat_equation_btcs
         for (int k = 0; k < nz - 1; ++k)
             for (int j = j_begin; j < j_end; ++j)
             {
-                double* ap = a(_, j, k);
-                double* cp = c(_, j, k);
+                float* ap = a(_, j, k);
+                float* cp = c(_, j, k);
 
                 __assume_aligned(ap, 64);
                 __assume_aligned(cp, 64);
@@ -737,11 +716,11 @@ struct heat_equation_btcs
         // Boundary conditions.
         for (int j = j_begin; j < j_end; ++j)
         {
-            double* bbeginp = b(_, j, 0);
-            double* cbeginp = c(_, j, 0);
+            float* bbeginp = b(_, j, 0);
+            float* cbeginp = c(_, j, 0);
 
-            double* aendp   = a(_, j, nz - 2);
-            double* bendp   = b(_, j, nz - 1);
+            float* aendp   = a(_, j, nz - 2);
+            float* bendp   = b(_, j, nz - 1);
 
             __assume_aligned(bbeginp, 64);
             __assume_aligned(cbeginp, 64);
@@ -758,18 +737,18 @@ struct heat_equation_btcs
         }
     }
 
-    double l2_norm(std::uint64_t step) noexcept
+    float l2_norm(std::uint64_t step) noexcept
     {
-        double l2 = 0.0;
+        float l2 = 0.0;
 
         for (int j = 0; j < ny; ++j)
             for (int i = 0; i < nx; ++i)
             {
-                double sum = 0.0;
+                float sum = 0.0;
 
-                double const* up = u(i, j, _);
+                float const* up = u(i, j, _);
 
-                array3d<double>::size_type const stride = u.stride_z();
+                array3d<float>::size_type const stride = u.stride_z();
 
                 __assume_aligned(up, 64);
 
@@ -777,17 +756,17 @@ struct heat_equation_btcs
                 #pragma simd
                 for (int k = 0; k < nz; ++k)
                 {
-                    array3d<double>::size_type const ks = k * stride;
+                    array3d<float>::size_type const ks = k * stride;
 
-                    double const exact = std::exp( -D * (N * N)
+                    float const exact = std::exp( -D * (N * N)
                                                  * (M_PI * M_PI) * (dt * step))
                                        * std::sin(N * M_PI * (dz * k)); 
 
-                    double const abs_term = std::fabs(up[ks] - exact);
+                    float const abs_term = std::fabs(up[ks] - exact);
                     sum = sum + abs_term * abs_term;
                 }
 
-                double const l2_here = std::sqrt(sum);
+                float const l2_here = std::sqrt(sum);
 
                 if ((0 == i) && (0 == j))
                     // First iteration, so we have nothing to compare against.
@@ -801,21 +780,21 @@ struct heat_equation_btcs
         return l2;
     }
 
-    double max_residual() noexcept
+    float max_residual() noexcept
     {
         residual(r, a, b, c, u);
 
-        double mr = 0.0; 
+        float mr = 0.0; 
 
         for (int j = 0; j < ny; ++j)
             for (int i = 0; i < nx; ++i)
             {
-                double min = 1.0e300;
-                double max = -1.0e300;
+                float min = 1.0e30;
+                float max = -1.0e30;
 
-                double const* rp = r(i, j, _);
+                float const* rp = r(i, j, _);
 
-                array3d<double>::size_type const stride = r.stride_z();
+                array3d<float>::size_type const stride = r.stride_z();
 
                 __assume_aligned(rp, 64);
 
@@ -823,13 +802,13 @@ struct heat_equation_btcs
                 #pragma simd
                 for (int k = 0; k < nz; ++k)
                 {
-                    array3d<double>::size_type const ks = k * stride;
+                    array3d<float>::size_type const ks = k * stride;
 
                     min = std::min(min, rp[ks]);
                     max = std::max(max, rp[ks]);
                 }
 
-                double const mr_here = std::max(std::fabs(min), std::fabs(max));
+                float const mr_here = std::max(std::fabs(min), std::fabs(max));
 
                 if ((0 == i) && (0 == j))
                     // First iteration, so we have nothing to compare against.
@@ -849,8 +828,6 @@ struct heat_equation_btcs
 
         high_resolution_timer t;
 
-        double solvertime = 0.0;
- 
         for (int s = 0; s < ns; ++s)
         {
             if (verify)
@@ -863,11 +840,7 @@ struct heat_equation_btcs
 
                 build_matrix(j_begin, j_end);
 
-                high_resolution_timer st;
-
                 tridiagonal_solve_native(j_begin, j_end, a, b, c, u);
-
-                solvertime += st.elapsed();
             }
 
             if (verify)
@@ -880,9 +853,9 @@ struct heat_equation_btcs
                     build_matrix(j_begin, j_end);
                 }
 
-                double const resid = max_residual();
+                float const resid = max_residual();
 
-                double const l2 = l2_norm(s + 1);  
+                float const l2 = l2_norm(s + 1);
 
                 std::printf(
                     "STEP %04u : "
@@ -899,9 +872,9 @@ struct heat_equation_btcs
             }
         }
 
-        double const walltime = t.elapsed();
+        float const walltime = t.elapsed();
 
-        double const l2 = l2_norm(ns);  
+        float const l2 = l2_norm(ns);  
 
         if (header)
             std::cout <<
@@ -914,13 +887,12 @@ struct heat_equation_btcs
                 "Tile Width (tw),"
                 "# of Timesteps (ns),"
                 "Timestep Size (dt),"
-                "Wall Time [s],"
-                "Solver Time [s],"
+                "Walltime [s],"
                 "L2 Norm"
                 ;
 
         std::cout
-            << "Streaming Mixed Precision,"
+            << "Streaming Single Precision,"
             << BUILD_TYPE << ","
             << D << ","
             << nx << ","
@@ -930,7 +902,6 @@ struct heat_equation_btcs
             << ns << ","
             << dt << ","
             << std::setprecision(7) << walltime << ","
-            << std::setprecision(7) << solvertime << ","
             << std::setprecision(17) << l2 << "\n"
             ;
     }

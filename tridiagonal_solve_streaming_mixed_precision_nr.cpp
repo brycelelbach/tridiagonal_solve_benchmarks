@@ -22,7 +22,6 @@
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
-#include <chrono>
 #include <type_traits>
 
 #include <cmath>
@@ -483,6 +482,60 @@ inline void residual(
 ///////////////////////////////////////////////////////////////////////////////
 // A*x = u; u = x
 
+template <std::uint64_t NRIterations = 1>
+inline double newton_raphson_divide(
+    double num, double den
+    ) noexcept __attribute__((always_inline));
+
+/// Sandybridge:
+///
+///    P0   P1
+///    RCP
+/// /> MUL  ADD
+/// |  MUL
+/// \-      ADD
+///    MUL
+///
+/// RCP + NRIterations * (2 * MUL + ADD) + MUL [FLOPS per point]
+///   1 + NRIterations * (2 *   1 +   1) +   1 [FLOPS per point]
+/// 
+/// THEORETICAL: 2 + 3 * NRIterations [FLOPS per point]
+///
+/// Haswell:
+///
+///    P0   P1
+///    RCP
+/// /> FMA
+/// \- FMA
+///    MUL
+///
+/// RCP + NRIterations * (2 * FMA) + MUL [FLOPS per point]
+///   1 + NRIterations * (2 *   1) +   1 [FLOPS per point]
+/// 
+/// THEORETICAL: 2 + 2 * NRIterations [FLOPS per point]
+template <std::uint64_t NRIterations>
+inline double newton_raphson_divide(double num, double den) noexcept
+{
+    /// RCP
+    double x = float(1.0) / float(den);
+
+    #pragma unroll
+    for (int i = 0; i < NRIterations; ++i)
+        /// Sandybridge:
+        /// t0 = den * x;          MUL 
+        /// t1 = x * t0;           MUL (dep t0)
+        /// t2 = x + x;            ADD 
+        /// x  = t2 - t1;          ADD (dep t2, t1)
+        /// 
+        /// Haswell:
+        /// t0 = - den * x + 1.0;  FMA 
+        /// x  = x * t0 + x;       FMA (dep t0)
+        x = x + x * (1.0 - den * x);
+
+    /// MUL (dep x)
+    return num * x;
+}
+
 inline void tridiagonal_solve_native(
     array3d<double>::size_type j_begin
   , array3d<double>::size_type j_end
@@ -509,7 +562,31 @@ inline void tridiagonal_solve_native(
     assert(u.ny()     == c.ny());
     assert(u.nz() - 1 == c.nz());
 
-    // Forward elimination. 
+    // Forward Elimination: (nz - 1) * (j_end - j_begin) * (nx) iterations
+    ///
+    /// Sandybridge:
+    ///
+    ///    P0   P1
+    ///    MUL
+    ///    MUL  ADD
+    ///         ADD
+    ///
+    /// newton_raphson_divide + 2 * MUL + 2 * ADD [FLOPS per iteration]
+    /// newton_raphson_divide + 2 *   1 + 2 *   1 [FLOPS per iteration]
+    ///  2 + 3 * NRIterations +                 4 [FLOPS per iteration]
+    ///
+    /// THEORETICAL: 6 + 3 * NRIterations [FLOPS per iteration]
+    ///
+    /// Haswell:
+    ///
+    ///    P0   P1
+    ///    FMA  FMA
+    ///
+    /// newton_raphson_divide + FMA [FLOPS per iteration]
+    /// newton_raphson_divide +   1 [FLOPS per iteration]
+    ///  2 + 2 * NRIterations +   1 [FLOPS per iteration]
+    ///
+    /// THEORETICAL: 3 + 2 * NRIterations [FLOPS per iteration]
     for (int k = 1; k < nz; ++k)
         for (int j = j_begin; j < j_end; ++j)
         {
@@ -536,21 +613,41 @@ inline void tridiagonal_solve_native(
             #pragma simd
             for (int i = 0; i < nx; ++i)
             {
+                /// Sandybridge:
+                /// m0    = newton_raphson_divide();
+                /// t0    = m0 * csub1p[i];          MUL (dep m0)
+                /// bp[i] = bp[i] - t0;              ADD (dep t0)
+                /// t1    = m0 * usub1p[i];          MUL (dep m0)
+                /// up[i] = up[i] - t1;              ADD (dep t1) 
+                ///
+                /// Haswell:
+                /// m0    = newton_raphson_divide();
+                /// bp[i] = - m0 * csubp[i] + bp[i]; FMA (dep m0)
+                /// up[i] = - m0 * usubp[i] + up[i]; FMA (dep m0)
+                
                 // double const m = a[k - 1] / b[k - 1];
-
-                // Numerator
-                float num0 = asub1p[i];
-
-                // Denominator
-                float const den0 = bsub1p[i];
-
-                double const m0 = num0 / den0;
-
+                // b[k] -= m * c[k - 1];
+                // u[k] -= m * u[k - 1];
+                double const m0 = newton_raphson_divide(asub1p[i], bsub1p[i]);
+                double const u0 = up[i] - m0 * usub1p[i];
                 bp[i] -= m0 * csub1p[i];
-                up[i] -= m0 * usub1p[i];
+                up[i] = u0;
             }
         }
 
+    // Pre-Substitution: (j_end - j_begin) * (nx) iterations
+    ///
+    /// Sandybridge:
+    ///
+    /// newton_raphson_divide [FLOPS per iteration]
+    ///
+    /// THEORETICAL: 2 + 3 * NRIterations [FLOPS per iteration]
+    ///
+    /// Haswell:
+    ///
+    /// newton_raphson_divide [FLOPS per iteration]
+    ///
+    /// THEORETICAL: 2 + 2 * NRIterations [FLOPS per iteration]
     for (int j = j_begin; j < j_end; ++j)
     {
         double* bendp = b(_, j, nz - 1);
@@ -565,18 +662,34 @@ inline void tridiagonal_solve_native(
         for (int i = 0; i < nx; ++i)
         {
             // u[nz - 1] = u[nz - 1] / b[nz - 1];
-
-            // Numerator
-            float num0 = uendp[i];
-
-            // Denominator
-            float const den0 = bendp[i];
-
-            uendp[i] = num0 / den0;
+            uendp[i] = newton_raphson_divide(uendp[i], bendp[i]);
         }
     }
  
-    // Back substitution. 
+    // Back Substitution: (nz - 1) * (j_end - j_begin) * (nx) iterations
+    ///
+    /// Sandybridge:
+    ///
+    ///    P0   P1
+    ///    MUL
+    ///         ADD
+    ///
+    /// MUL + ADD + newton_raphson_divide [FLOPS per iteration]
+    ///   1 +   1 + newton_raphson_divide [FLOPS per iteration]
+    ///         2 +  2 + 3 * NRIterations [FLOPS per iteration]
+    ///
+    /// THEORETICAL: 4 + 3 * NRIterations [FLOPS per iteration]
+    ///
+    /// Haswell:
+    ///
+    ///    P0   P1
+    ///    FMA
+    ///
+    /// FMA + newton_raphson_divide [FLOPS per iteration]
+    ///   1 + newton_raphson_divide [FLOPS per iteration]
+    ///   1 +  2 + 2 * NRIterations [FLOPS per iteration]
+    ///
+    /// THEORETICAL: 3 + 2 * NRIterations [FLOPS per iteration] 
     for (int k = nz - 2; k >= 0; --k)
         for (int j = j_begin; j < j_end; ++j)
         {
@@ -597,15 +710,17 @@ inline void tridiagonal_solve_native(
             #pragma simd
             for (int i = 0; i < nx; ++i)
             {
+                /// Sandybridge:
+                /// t0  = cp[i] * uadd1p[i];            MUL 
+                /// num = up[i] - t0;                   ADD (dep t0)
+                /// newton_raphson_divide();            (dep num)
+                /// 
+                /// Haswell:
+                /// num = - cp[i] * uadd1p[i] + up[i];  FMA
+                /// newton_raphson_divide();            (dep num)
+
                 // u[k] = (u[k] - c[k] * u[k + 1]) / b[k];
-
-                // Numerator
-                float num0 = (up[i] - cp[i] * uadd1p[i]);
-
-                // Denominator
-                float const den0 = bp[i];
-
-                up[i] = num0 / den0;
+                up[i] = newton_raphson_divide(up[i] - cp[i] * uadd1p[i], bp[i]);
             }
         }
 }
@@ -920,7 +1035,7 @@ struct heat_equation_btcs
                 ;
 
         std::cout
-            << "Streaming Mixed Precision,"
+            << "Streaming Mixed Precision NR,"
             << BUILD_TYPE << ","
             << D << ","
             << nx << ","

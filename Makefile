@@ -45,6 +45,5 @@ $(DIRECTORIES)/:
 clean:
 	@echo "Cleaning build directory"
 	@rm -f $(DIRECTORIES)/*
-	@rmdir $(DIRECTORIES)
 
 
