@@ -486,6 +486,8 @@ struct heat_equation_btcs
 
         high_resolution_timer t;
 
+        double solvertime = 0.0;
+
         for (int s = 0; s < ns; ++s)
         {
             if (verify)
@@ -498,6 +500,8 @@ struct heat_equation_btcs
 
                 build_matrix(j_begin, j_end);
             }
+
+            high_resolution_timer st;
 
             for (int i = 0; i < nx; ++i)
                 for (int j = 0; j < ny; ++j)
@@ -520,6 +524,8 @@ struct heat_equation_btcs
 
                     assert(mkl_info == 0);
                 }
+
+            solvertime += st.elapsed();
 
             if (verify)
             {
@@ -564,8 +570,8 @@ struct heat_equation_btcs
                 "Z (Horizontal) Extent (nz),"
                 "Tile Width (tw),"
                 "# of Timesteps (ns),"
-                "Timestep Size (dt),"
-                "Walltime [s],"
+                "Wall Time [s],"
+                "Solver Time [s],"
                 "L2 Norm"
                 ;
 
@@ -580,6 +586,7 @@ struct heat_equation_btcs
             << ns << ","
             << dt << ","
             << std::setprecision(7) << walltime << ","
+            << std::setprecision(7) << solvertime << ","
             << std::setprecision(17) << l2 << "\n"
             ;
     }

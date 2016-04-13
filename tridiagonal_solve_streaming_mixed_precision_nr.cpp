@@ -714,7 +714,7 @@ struct heat_equation_btcs
         high_resolution_timer t;
 
         double solvertime = 0.0;
- 
+
         for (int s = 0; s < ns; ++s)
         {
             if (verify)
