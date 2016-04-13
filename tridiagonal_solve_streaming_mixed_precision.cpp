@@ -30,178 +30,20 @@
 #include "high_resolution_timer.hpp"
 #include "get_env_variable.hpp"
 #include "fp_utils.hpp"
-
-///////////////////////////////////////////////////////////////////////////////
-
-struct placeholder {};
-
-constexpr placeholder _ {};
-
-template <typename T, std::uint64_t Alignment = 64>
-struct array3d
-{
-    typedef std::ptrdiff_t size_type;
-    typedef T value_type;
-
-  private:
-    T* data_;
-    size_type nx_, ny_, nz_;
-
-  public:
-    constexpr array3d() noexcept : data_(), nx_(), ny_(), nz_() {}
-
-    array3d(size_type nx, size_type ny, size_type nz) noexcept
-    {
-        resize(nx, ny, nz);
-    }
-
-    ~array3d()
-    {
-        clear();
-    }
-
-    void resize(size_type nx, size_type ny, size_type nz) noexcept
-    {
-        clear();
-
-        assert(0 == ((nx * ny * nz * sizeof(T)) % Alignment));
-
-        void* p = 0; 
-        int const r = posix_memalign(&p, Alignment, nx * ny * nz * sizeof(T));
-        assert(0 == r);
-
-        std::memset(p, 0, nx * ny * nz * sizeof(T));
-
-        data_ = reinterpret_cast<T*>(p);
-
-        nx_ = nx;
-        ny_ = ny;
-        nz_ = nz;
-    }
-
-    void clear() noexcept
-    {
-        if (data_)
-        {
-            assert(0 != nx_ * ny_ * nz_);
-            std::free(data_);
-        }
-
-        data_ = 0;
-        nx_ = 0;
-        ny_ = 0;
-        nz_ = 0;
-    }
-
-    T* data() const noexcept
-    {
-        return data_;
-    }
-    T* data() noexcept
-    {
-        return data_;
-    }
-
-    T const& operator()(size_type i, size_type j, size_type k) const noexcept
-    {
-        return data_[index(i, j, k)];
-    }
-    T& operator()(size_type i, size_type j, size_type k) noexcept
-    {
-        return data_[index(i, j, k)];
-    }
-
-    T const* operator()(placeholder p, size_type j, size_type k) const noexcept
-    {
-        return &data_[index(p, j, k)];
-    }
-    T* operator()(placeholder p, size_type j, size_type k) noexcept
-    {
-        return &data_[index(p, j, k)];
-    }
-
-    T const* operator()(size_type i, placeholder p, size_type k) const noexcept
-    {
-        return &data_[index(i, p, k)];
-    }
-    T* operator()(size_type i, placeholder p, size_type k) noexcept
-    {
-        return &data_[index(i, p, k)];
-    }
-
-    T const* operator()(size_type i, size_type j, placeholder p) const noexcept
-    {
-        return &data_[index(i, j, p)];
-    }
-    T* operator()(size_type i, size_type j, placeholder p) noexcept
-    {
-        return &data_[index(i, j, p)];
-    }
-
-    constexpr size_type index(
-        size_type i, size_type j, size_type k
-        ) const noexcept
-    {
-        return i + nx_ * j + nx_ * ny_ * k;
-    }
-    constexpr size_type index(
-        placeholder, size_type j, size_type k
-        ) const noexcept
-    {
-        return nx_ * j + nx_ * ny_ * k;
-    }
-    constexpr size_type index(
-        size_type i, placeholder, size_type k
-        ) const noexcept
-    {
-        return i + nx_ * ny_ * k;
-    }
-    constexpr size_type index(
-        size_type i, size_type j, placeholder
-        ) const noexcept
-    {
-        return i + nx_ * j;
-    }    
-
-    constexpr size_type stride_x() const noexcept
-    {
-        return 1;
-    }
-    constexpr size_type stride_y() const noexcept
-    {
-        return nx_;
-    }
-    constexpr size_type stride_z() const noexcept
-    {
-        return nx_ * ny_;
-    }
-
-    constexpr size_type nx() const noexcept
-    {
-        return nx_;
-    }
-    constexpr size_type ny() const noexcept
-    {
-        return ny_;
-    }
-    constexpr size_type nz() const noexcept
-    {
-        return nz_;
-    }
-};
+#include "array3d.hpp"
 
 ///////////////////////////////////////////////////////////////////////////////
 // dest = src
 
 inline void copy(
-    array3d<double>::size_type j_begin
-  , array3d<double>::size_type j_end
-  , array3d<double>& dest
-  , array3d<double> const& src
+    array3d<double, layout_left>::size_type j_begin
+  , array3d<double, layout_left>::size_type j_end
+  , array3d<double, layout_left>& dest
+  , array3d<double, layout_left> const& src
     ) noexcept
 {
-    array3d<double>::size_type const nx = src.nx();
-    array3d<double>::size_type const nz = src.nz();
+    array3d<double, layout_left>::size_type const nx = src.nx();
+    array3d<double, layout_left>::size_type const nz = src.nz();
 
     __assume(0 == (nx % 8)); 
 
@@ -224,7 +66,10 @@ inline void copy(
         }
 }
 
-inline void copy(array3d<double>& dest, array3d<double> const& src) noexcept
+inline void copy(
+    array3d<double, layout_left>& dest
+  , array3d<double, layout_left> const& src
+    ) noexcept
 {
     copy(0, src.ny(), dest, src);
 }
@@ -233,17 +78,17 @@ inline void copy(array3d<double>& dest, array3d<double> const& src) noexcept
 // r = A*u - r
 
 inline void residual(
-    array3d<double>::size_type j_begin
-  , array3d<double>::size_type j_end
-  , array3d<double>& r       // Residual
-  , array3d<double> const& a // Lower band
-  , array3d<double> const& b // Diagonal
-  , array3d<double> const& c // Upper band
-  , array3d<double> const& u // Solution
+    array3d<double, layout_left>::size_type j_begin
+  , array3d<double, layout_left>::size_type j_end
+  , array3d<double, layout_left>& r       // Residual
+  , array3d<double, layout_left> const& a // Lower band
+  , array3d<double, layout_left> const& b // Diagonal
+  , array3d<double, layout_left> const& c // Upper band
+  , array3d<double, layout_left> const& u // Solution
     ) noexcept
 {
-    array3d<double>::size_type const nx = r.nx();
-    array3d<double>::size_type const nz = r.nz();
+    array3d<double, layout_left>::size_type const nx = r.nx();
+    array3d<double, layout_left>::size_type const nz = r.nz();
 
     __assume(0 == (nx % 8)); 
 
@@ -369,11 +214,11 @@ inline void residual(
 }
 
 inline void residual(
-    array3d<double>& r       // Residual
-  , array3d<double> const& a // Lower band
-  , array3d<double> const& b // Diagonal
-  , array3d<double> const& c // Upper band
-  , array3d<double> const& u // Solution
+    array3d<double, layout_left>& r       // Residual
+  , array3d<double, layout_left> const& a // Lower band
+  , array3d<double, layout_left> const& b // Diagonal
+  , array3d<double, layout_left> const& c // Upper band
+  , array3d<double, layout_left> const& u // Solution
     ) noexcept
 {
     residual(0, r.ny(), r, a, b, c, u);
@@ -383,16 +228,16 @@ inline void residual(
 // A*x = u; u = x
 
 inline void tridiagonal_solve_native(
-    array3d<double>::size_type j_begin
-  , array3d<double>::size_type j_end
-  , array3d<double>& a    // Lower band
-  , array3d<double>& b    // Diagonal
-  , array3d<double>& c    // Upper band
-  , array3d<double>& u    // Solution
+    array3d<double, layout_left>::size_type j_begin
+  , array3d<double, layout_left>::size_type j_end
+  , array3d<double, layout_left>& a    // Lower band
+  , array3d<double, layout_left>& b    // Diagonal
+  , array3d<double, layout_left>& c    // Upper band
+  , array3d<double, layout_left>& u    // Solution
     ) noexcept
 {
-    array3d<double>::size_type const nx = u.nx();
-    array3d<double>::size_type const nz = u.nz();
+    array3d<double, layout_left>::size_type const nx = u.nx();
+    array3d<double, layout_left>::size_type const nz = u.nz();
 
     __assume(0 == (nx % 8)); 
 
@@ -533,13 +378,13 @@ struct heat_equation_btcs
 
     double A_coef;
 
-    array3d<double> a;
-    array3d<double> b;
-    array3d<double> c;
+    array3d<double, layout_left> a;
+    array3d<double, layout_left> b;
+    array3d<double, layout_left> c;
 
-    array3d<double> u;
+    array3d<double, layout_left> u;
 
-    array3d<double> r;
+    array3d<double, layout_left> r;
 
   public:
     heat_equation_btcs() noexcept
@@ -668,7 +513,8 @@ struct heat_equation_btcs
 
                 double const* up = u(i, j, _);
 
-                array3d<double>::size_type const stride = u.stride_z();
+                array3d<double, layout_left>::size_type const
+                    stride = u.stride_z();
 
                 __assume_aligned(up, 64);
 
@@ -676,7 +522,8 @@ struct heat_equation_btcs
                 #pragma simd
                 for (int k = 0; k < nz; ++k)
                 {
-                    array3d<double>::size_type const ks = k * stride;
+                    array3d<double, layout_left>::size_type const
+                        ks = k * stride;
 
                     double const exact = std::exp( -D * (N * N)
                                                  * (M_PI * M_PI) * (dt * step))
@@ -714,7 +561,8 @@ struct heat_equation_btcs
 
                 double const* rp = r(i, j, _);
 
-                array3d<double>::size_type const stride = r.stride_z();
+                array3d<double, layout_left>::size_type const
+                    stride = r.stride_z();
 
                 __assume_aligned(rp, 64);
 
@@ -722,7 +570,8 @@ struct heat_equation_btcs
                 #pragma simd
                 for (int k = 0; k < nz; ++k)
                 {
-                    array3d<double>::size_type const ks = k * stride;
+                    array3d<double, layout_left>::size_type const
+                        ks = k * stride;
 
                     min = std::min(min, rp[ks]);
                     max = std::max(max, rp[ks]);
