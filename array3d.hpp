@@ -8,10 +8,10 @@
 #if !defined(CXX_6594A0DA_8E9E_4B31_A32F_38EFDF13289E)
 #define CXX_6594A0DA_8E9E_4B31_A32F_38EFDF13289E
 
+#include <cstdint>
 #include <cstddef>
 #include <cstring>
 #include <cassert>
-#include <cstdlib>
 
 struct placeholder {};
 
@@ -148,7 +148,6 @@ struct layout_right
         return nz_;
     }
 };
-
 
 template <
     typename T
