@@ -10,8 +10,8 @@
 
 #include <cstdint>
 #include <cstddef>
-#include <cstring>
-#include <cassert>
+
+#include "make_aligned_array.hpp"
 
 struct placeholder {};
 
@@ -160,7 +160,7 @@ struct array3d
     typedef T value_type;
 
   private:
-    T* data_;
+    decltype(make_aligned_array<T, Alignment>(0)) data_;
     Layout layout_;
 
   public:
@@ -172,46 +172,19 @@ struct array3d
         resize(nx(), ny(), nz());
     }
 
-    ~array3d()
-    {
-        clear();
-    }
-
     void resize(size_type nx, size_type ny, size_type nz) noexcept
     {
-        clear();
-
-        assert(0 == ((nx * ny * nz * sizeof(T)) % Alignment));
-
-        void* p = 0; 
-        int const r = posix_memalign(&p, Alignment, nx * ny * nz * sizeof(T));
-        assert(0 == r);
-
-        std::memset(p, 0, nx * ny * nz * sizeof(T));
-
-        data_   = reinterpret_cast<T*>(p);
+        data_   = make_aligned_array<T, Alignment>(nx * ny * nz);
         layout_ = Layout(nx, ny, nz);
-    }
-
-    void clear() noexcept
-    {
-        if (data_)
-        {
-            assert(0 != nx() * ny() * nz());
-            std::free(data_);
-        }
-
-        data_   = 0;
-        layout_ = Layout();
     }
 
     T* data() const noexcept
     {
-        return data_;
+        return data_.get();
     }
     T* data() noexcept
     {
-        return data_;
+        return data_.get();
     }
 
     T const& operator()(size_type i, size_type j, size_type k) const noexcept

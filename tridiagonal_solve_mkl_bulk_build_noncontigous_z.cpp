@@ -258,11 +258,11 @@ struct heat_equation_btcs
 
     array3d<double, layout_left> r;
 
-    std::vector<double> a_buf;
-    std::vector<double> b_buf;
-    std::vector<double> c_buf;
+    decltype(make_aligned_array<double>(0)) a_buf;
+    decltype(make_aligned_array<double>(0)) b_buf;
+    decltype(make_aligned_array<double>(0)) c_buf;
 
-    std::vector<double> u_buf;
+    decltype(make_aligned_array<double>(0)) u_buf;
 
   public:
     heat_equation_btcs() noexcept
@@ -320,10 +320,10 @@ struct heat_equation_btcs
         r.resize(nx, ny, nz);
 
         // Allocate storage for gather buffers.
-        a_buf.resize(nz - 1);
-        b_buf.resize(nz);
-        c_buf.resize(nz - 1);
-        u_buf.resize(nz);
+        a_buf = make_aligned_array<double>(nz - 1);
+        b_buf = make_aligned_array<double>(nz);
+        c_buf = make_aligned_array<double>(nz - 1);
+        u_buf = make_aligned_array<double>(nz);
     }
 
     void build_matrix(std::ptrdiff_t j_begin, std::ptrdiff_t j_end) noexcept
@@ -507,8 +507,14 @@ struct heat_equation_btcs
                     double* ap = a(i, j, _); 
                     double* cp = c(i, j, _); 
 
+                    double* a_bufp = a_buf.get();
+                    double* c_bufp = c_buf.get();
+
                     __assume_aligned(ap, 64);
                     __assume_aligned(cp, 64);
+
+                    __assume_aligned(a_bufp, 64);
+                    __assume_aligned(c_bufp, 64);
 
                     // NOTE: Strided access.
                     #pragma simd
@@ -517,15 +523,21 @@ struct heat_equation_btcs
                         array3d<double, layout_left>::size_type const
                             ks = k * stride;
 
-                        a_buf[k] = ap[ks];
-                        c_buf[k] = cp[ks];
+                        a_bufp[k] = ap[ks];
+                        c_bufp[k] = cp[ks];
                     }
 
                     double* bp = b(i, j, _); 
                     double* up = u(i, j, _); 
 
+                    double* b_bufp = b_buf.get();
+                    double* u_bufp = u_buf.get();
+
                     __assume_aligned(bp, 64);
                     __assume_aligned(up, 64);
+
+                    __assume_aligned(b_bufp, 64);
+                    __assume_aligned(u_bufp, 64);
 
                     // NOTE: Strided access.
                     #pragma simd
@@ -534,8 +546,8 @@ struct heat_equation_btcs
                         array3d<double, layout_left>::size_type const
                             ks = k * stride;
 
-                        b_buf[k] = bp[ks];
-                        u_buf[k] = up[ks];
+                        b_bufp[k] = bp[ks];
+                        u_bufp[k] = up[ks];
                     }
 
                     int mkl_n    = nz;
@@ -544,13 +556,13 @@ struct heat_equation_btcs
                     int mkl_info = 0;
 
                     dgtsv_(
-                        &mkl_n,       // Matrix order.
-                        &mkl_nrhs,    // # of right hand sides.
-                        a_buf.data(), // Subdiagonal part.
-                        b_buf.data(), // Diagonal part.
-                        c_buf.data(), // Superdiagonal part.
-                        u_buf.data(), // Column to solve.
-                        &mkl_ldb,     // Leading dimension of RHS.
+                        &mkl_n,      // Matrix order.
+                        &mkl_nrhs,   // # of right hand sides.
+                        a_buf.get(), // Subdiagonal part.
+                        b_buf.get(), // Diagonal part.
+                        c_buf.get(), // Superdiagonal part.
+                        u_buf.get(), // Column to solve.
+                        &mkl_ldb,    // Leading dimension of RHS.
                         &mkl_info
                         );
 
@@ -563,7 +575,7 @@ struct heat_equation_btcs
                         array3d<double, layout_left>::size_type const
                             ks = k * stride;
 
-                        up[ks] = u_buf[k];
+                        up[ks] = u_bufp[k];
                     }
                 }
 

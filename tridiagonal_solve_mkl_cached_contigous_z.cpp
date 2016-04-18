@@ -82,11 +82,11 @@ inline void copy(
 inline void residual(
     array3d<double, layout_right>::size_type j_begin
   , array3d<double, layout_right>::size_type j_end
-  , array3d<double, layout_right>& r       // Residual
-  , std::vector<double> const& a           // Lower band
-  , std::vector<double> const& b           // Diagonal
-  , std::vector<double> const& c           // Upper band
-  , array3d<double, layout_right> const& u // Solution
+  , array3d<double, layout_right>& r                 // Residual
+  , decltype(make_aligned_array<double>(0)) const& a // Lower band
+  , decltype(make_aligned_array<double>(0)) const& b // Diagonal 
+  , decltype(make_aligned_array<double>(0)) const& c // Upper band 
+  , array3d<double, layout_right> const& u           // Solution
     ) noexcept
 {
     array3d<double, layout_right>::size_type const nx = r.nx();
@@ -94,15 +94,9 @@ inline void residual(
 
     __assume(0 == (nz % 8)); 
 
-    assert(r.nz() - 1 == a.size());
-
-    assert(r.nz()     == b.size());
-
-    assert(r.nz() - 1 == c.size());
-
-    assert(r.nx()     == u.nx());
-    assert(r.ny()     == u.ny());
-    assert(r.nz()     == u.nz());
+    assert(r.nx() == u.nx());
+    assert(r.ny() == u.ny());
+    assert(r.nz() == u.nz());
 
     // First row.
     for (int i = 0; i < nx; ++i)
@@ -120,6 +114,10 @@ inline void residual(
         __assume_aligned(u0p, 64);
         __assume_aligned(u1p, 64);
 
+        double const b0 = b[0];
+
+        double const c0 = c[0];
+
         // NOTE: Strided access.
         #pragma simd
         for (int j = j_begin; j < j_end; ++j)
@@ -130,7 +128,7 @@ inline void residual(
             // NOTE: The comment is k-indexed. The code is j-indexed for
             // accesses to u[] and r[].
             // r[0] = (b[0] * u[0] + c[0] * u[1]) - r[0];
-            r0p[jurs] = (b[0] * u0p[jurs] + c[0] * u1p[jurs])
+            r0p[jurs] = (b0 * u0p[jurs] + c0 * u1p[jurs])
                       - r0p[jurs];
         }
     }
@@ -141,9 +139,21 @@ inline void residual(
         {
             double*       rp = r(i, j, _);
 
+            double const* ap = a.get();
+
+            double const* bp = b.get();
+
+            double const* cp = c.get();
+
             double const* up = u(i, j, _);
 
             __assume_aligned(rp, 64);
+
+            __assume_aligned(ap, 64);
+
+            __assume_aligned(bp, 64);
+
+            __assume_aligned(cp, 64);
 
             __assume_aligned(up, 64);
 
@@ -154,9 +164,9 @@ inline void residual(
                 //        + b[k] * u[k]
                 //        + c[k] * u[k + 1])
                 //      - r[k];
-                rp[k] = ( a[k - 1] * up[k - 1]
-                        + b[k] * up[k]
-                        + c[k] * up[k + 1])
+                rp[k] = ( ap[k - 1] * up[k - 1]
+                        + bp[k] * up[k]
+                        + cp[k] * up[k + 1])
                       - rp[k];
             }
         }
@@ -177,6 +187,10 @@ inline void residual(
         __assume_aligned(unz2p, 64);
         __assume_aligned(unz1p, 64);
 
+        double const anz2 = a[nz - 2];
+
+        double const bnz1 = b[nz - 1];
+
         // NOTE: Strided access.
         #pragma simd
         for (int j = j_begin; j < j_end; ++j)
@@ -188,19 +202,18 @@ inline void residual(
             // accesses to u[] and r[].
             // r[nz - 1] = (a[nz - 2] * u[nz - 2] + b[nz - 1] * u[nz - 1])
             //           - r[nz - 1];
-            rnz1p[jurs] = ( a[nz - 2] * unz2p[jurs]
-                          + b[nz - 1] * unz1p[jurs])
+            rnz1p[jurs] = (anz2 * unz2p[jurs] + bnz1 * unz1p[jurs])
                         - rnz1p[jurs];
         }
     }
 }
 
 inline void residual(
-    array3d<double, layout_right>& r       // Residual
-  , std::vector<double> const& a           // Lower band
-  , std::vector<double> const& b           // Diagonal
-  , std::vector<double> const& c           // Upper band
-  , array3d<double, layout_right> const& u // Solution
+    array3d<double, layout_right>& r                 // Residual
+  , decltype(make_aligned_array<double>(0)) const& a // Lower band
+  , decltype(make_aligned_array<double>(0)) const& b // Diagonal 
+  , decltype(make_aligned_array<double>(0)) const& c // Upper band 
+  , array3d<double, layout_right> const& u           // Solution
     ) noexcept
 {
     residual(0, r.ny(), r, a, b, c, u);
@@ -230,9 +243,9 @@ struct heat_equation_btcs
 
     double A_coef;
 
-    std::vector<double> a;
-    std::vector<double> b;
-    std::vector<double> c;
+    decltype(make_aligned_array<double>(0)) a;
+    decltype(make_aligned_array<double>(0)) b;
+    decltype(make_aligned_array<double>(0)) c;
 
     array3d<double, layout_right> u;
 
@@ -269,9 +282,9 @@ struct heat_equation_btcs
         A_coef = D * dt / (dz * dz);
 
         // Allocate storage for the matrix.
-        a.resize(nz - 1);
-        b.resize(nz);
-        c.resize(nz - 1);
+        a = make_aligned_array<double>(nz - 1);
+        b = make_aligned_array<double>(nz);
+        c = make_aligned_array<double>(nz - 1);
 
         // Allocate storage for the problem state and initialize it.
         u.resize(nx, ny, nz);
@@ -301,7 +314,7 @@ struct heat_equation_btcs
 
         __assume(0 == (nz % 8)); 
 
-        double* bp = b.data();
+        double* bp = b.get();
 
         __assume_aligned(bp, 64);
 
@@ -309,8 +322,8 @@ struct heat_equation_btcs
         for (int k = 0; k < nz; ++k)
             bp[k] = b_term;
 
-        double* ap = a.data();
-        double* cp = c.data();
+        double* ap = a.get();
+        double* cp = c.get();
 
         __assume_aligned(ap, 64);
         __assume_aligned(cp, 64);
@@ -434,9 +447,9 @@ struct heat_equation_btcs
                     dgtsv_(
                         &mkl_n,       // Matrix order.
                         &mkl_nrhs,    // # of right hand sides.
-                        a.data(),     // Subdiagonal part.
-                        b.data(),     // Diagonal part.
-                        c.data(),     // Superdiagonal part.
+                        a.get(),      // Subdiagonal part.
+                        b.get(),      // Diagonal part.
+                        c.get(),      // Superdiagonal part.
                         u(i, j, _),   // Column to solve.
                         &mkl_ldb,     // Leading dimension of RHS.
                         &mkl_info
