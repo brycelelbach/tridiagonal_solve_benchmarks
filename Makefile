@@ -1,6 +1,19 @@
+###############################################################################
+# Copyright (c) 2015-6 Bryce Adelstein Lelbach aka wash <brycelelbach@gmail.com>
+#
+# Distributed under the Boost Software License, Version 1.0. (See accompanying
+# file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+###############################################################################
+
 CXX=icpc
 
-ifdef DEBUG
+CXXFLAGS+=-mavx -std=c++11 -mkl=sequential
+
+ifneq ($(OPENMP),0)
+  CXXFLAGS+=-openmp
+endif
+
+ifeq ($(DEBUG),1)
   CXXFLAGS+=-O0 -ggdb
   ifeq ($(ASSERTS),0)
     CXXFLAGS+=-DNDEBUG
@@ -36,8 +49,6 @@ else
   endif
 endif
 
-
-CXXFLAGS+=-mavx -std=c++11 -mkl=sequential -openmp
 SOURCES=$(shell ls -1 $(CURDIR)/*.cpp)
 PROGRAMS=$(SOURCES:.cpp=)
 DIRECTORIES=$(CURDIR)/build
