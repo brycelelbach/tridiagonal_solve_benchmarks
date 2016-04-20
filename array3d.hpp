@@ -19,7 +19,7 @@ constexpr placeholder _ {};
 
 struct layout_left
 {
-    typedef std::ptrdiff_t size_type;
+    using size_type = std::ptrdiff_t;
 
   private:
     size_type nx_, ny_, nz_;
@@ -85,7 +85,7 @@ struct layout_left
 
 struct layout_right
 {
-    typedef std::ptrdiff_t size_type;
+    using size_type = std::ptrdiff_t;
 
   private:
     size_type nx_, ny_, nz_;
@@ -156,8 +156,8 @@ template <
     >
 struct array3d
 {
-    typedef typename Layout::size_type size_type;
-    typedef T value_type;
+    using size_type  = typename Layout::size_type;
+    using value_type = T;
 
   private:
     decltype(make_aligned_array<T, Alignment>(0)) data_;
