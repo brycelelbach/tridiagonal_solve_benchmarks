@@ -29,7 +29,7 @@
 
 #include <mkl.h>
 
-#include "high_resolution_timer.hpp"
+#include "timers.hpp"
 #include "get_env_variable.hpp"
 #include "fp_utils.hpp"
 #include "array3d.hpp"

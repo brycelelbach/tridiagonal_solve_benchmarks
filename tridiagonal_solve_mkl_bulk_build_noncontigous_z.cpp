@@ -29,7 +29,7 @@
 
 #include <mkl.h>
 
-#include "high_resolution_timer.hpp"
+#include "timers.hpp"
 #include "get_env_variable.hpp"
 #include "fp_utils.hpp"
 #include "array3d.hpp"
@@ -490,8 +490,8 @@ struct heat_equation_btcs
 
             for (int j = 0; j < ny; j += tw)
             {
-                std::ptrdiff_t j_begin = j;
-                std::ptrdiff_t j_end   = j + tw;
+                std::ptrdiff_t const j_begin = j;
+                std::ptrdiff_t const j_end   = j + tw;
 
                 build_matrix(j_begin, j_end);
             }
@@ -585,8 +585,8 @@ struct heat_equation_btcs
             {
                 for (int j = 0; j < ny; j += tw)
                 {
-                    std::ptrdiff_t j_begin = j;
-                    std::ptrdiff_t j_end   = j + tw;
+                    std::ptrdiff_t const j_begin = j;
+                    std::ptrdiff_t const j_end   = j + tw;
 
                     build_matrix(j_begin, j_end);
                 }

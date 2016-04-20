@@ -31,7 +31,7 @@
     #include <omp.h>
 #endif
 
-#include "high_resolution_timer.hpp"
+#include "timers.hpp"
 #include "get_env_variable.hpp"
 #include "fp_utils.hpp"
 #include "array3d.hpp"
@@ -478,6 +478,8 @@ inline void tridiagonal_solve_native(
 
 struct heat_equation_btcs
 {
+    using timer = high_resolution_timer;
+
     bool verify;
     bool header;
 
@@ -507,7 +509,7 @@ struct heat_equation_btcs
     array3d<double, layout_left> r;
 
     #if defined(_OPENMP)
-        std::vector<double> solvertimes;
+        std::vector<timer::value_type> solvertimes;
     #endif
 
   public:
@@ -724,10 +726,10 @@ struct heat_equation_btcs
     {
         initialize();
 
-        high_resolution_timer t;
+        timer t;
 
         #if !defined(_OPENMP)
-            double solvertime = 0.0;
+            timer::value_type solvertime = 0.0;
         #endif
 
         for (int s = 0; s < ns; ++s)
@@ -738,12 +740,12 @@ struct heat_equation_btcs
             #pragma omp parallel for schedule(static) 
             for (int j = 0; j < ny; j += tw)
             {
-                std::ptrdiff_t j_begin = j;
-                std::ptrdiff_t j_end   = j + tw;
+                std::ptrdiff_t const j_begin = j;
+                std::ptrdiff_t const j_end   = j + tw;
 
                 build_matrix(j_begin, j_end);
 
-                high_resolution_timer st;
+                timer st;
 
                 tridiagonal_solve_native(j_begin, j_end, a, b, c, u);
 
@@ -758,8 +760,8 @@ struct heat_equation_btcs
             {
                 for (int j = 0; j < ny; j += tw)
                 {
-                    std::ptrdiff_t j_begin = j;
-                    std::ptrdiff_t j_end   = j + tw;
+                    std::ptrdiff_t const j_begin = j;
+                    std::ptrdiff_t const j_end   = j + tw;
 
                     build_matrix(j_begin, j_end);
                 }
@@ -783,15 +785,15 @@ struct heat_equation_btcs
             }
         }
 
-        double const walltime = t.elapsed();
+        timer::value_type const walltime = t.elapsed();
 
         #if defined(_OPENMP)
-            double solvertime = 0.0;
+            timer::value_type solvertime = 0.0;
 
-            for (double t : solvertimes)
+            for (timer::value_type t : solvertimes)
                 solvertime += t;
 
-            solvertime /= double(omp_get_max_threads());
+            solvertime /= timer::value_type(omp_get_max_threads());
         #endif
 
         double const l2 = l2_norm(ns);  
@@ -808,8 +810,8 @@ struct heat_equation_btcs
                 "# of Timesteps (ns),"
                 "Timestep Size (dt),"
                 "# of Threads,"
-                "Wall Time [s],"
-                "Solver Time [s],"
+                "Wall Time " << t.units() << ","
+                "Solver Time " << t.units() << ","
                 "L2 Norm"
                 ;
 
