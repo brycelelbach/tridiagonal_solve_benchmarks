@@ -16,6 +16,8 @@
 
 struct high_resolution_timer
 {
+    using value_type = double;
+
     high_resolution_timer()
       : start_time_(take_time_stamp())
     {}
@@ -25,14 +27,19 @@ struct high_resolution_timer
         start_time_ = take_time_stamp();
     }
 
-    double elapsed() const // Return elapsed time in seconds.
+    value_type elapsed() const // Return elapsed time in seconds.
     {
-        return double(take_time_stamp() - start_time_) * 1e-9;
+        return value_type(take_time_stamp() - start_time_) * 1e-9;
     }
 
     std::uint64_t elapsed_nanoseconds() const
     {
         return take_time_stamp() - start_time_;
+    }
+
+    char const* units() const noexcept
+    {
+        return "[s]";
     }
 
   protected:
@@ -44,6 +51,45 @@ struct high_resolution_timer
 
   private:
     std::uint64_t start_time_;
+};
+
+struct tsc_timer
+{
+    using value_type = std::uint64_t;
+
+    tsc_timer() noexcept
+      : start_time_(take_time_stamp())
+    {}
+
+    void restart() noexcept
+    {
+        start_time_ = take_time_stamp();
+    }
+
+    value_type elapsed() const noexcept
+    {
+        return take_time_stamp() - start_time_;
+    }
+
+    char const* units() const noexcept
+    {
+        return "[tsc]";
+    }
+
+  protected:
+    static value_type take_time_stamp() noexcept
+    {
+        std::uint32_t lo = 0, hi = 0;
+        __asm__ __volatile__ (
+            "rdtscp ;\n"
+            : "=a" (lo), "=d" (hi)
+            :
+            : "rcx");
+        return ((static_cast<value_type>(hi)) << 32) | lo;
+    }
+
+  private:
+    value_type start_time_;
 };
 
 #endif // TSB_E4F4B515_8E1B_4301_8B18_7A802EDAC5D2
