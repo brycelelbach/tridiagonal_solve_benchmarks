@@ -27,6 +27,10 @@
 #include <cstdio>
 #include <cstdint>
 
+#if defined(_OPENMP)
+    #include <omp.h>
+#endif
+
 #include "timers.hpp"
 #include "get_env_variable.hpp"
 #include "fp_utils.hpp"
@@ -338,6 +342,8 @@ inline void tridiagonal_solve_native(
 
 struct heat_equation_btcs
 {
+    using timer = high_resolution_timer;
+
     bool verify;
     bool header;
 
@@ -365,6 +371,10 @@ struct heat_equation_btcs
     array3d<double, layout_left> u;
 
     array3d<double, layout_left> r;
+
+    #if defined(_OPENMP)
+        std::vector<timer::value_type> solvertimes;
+    #endif
 
   public:
     heat_equation_btcs() noexcept
@@ -420,6 +430,11 @@ struct heat_equation_btcs
 
         // Allocate storage for the residual.
         r.resize(nx, ny, nz);
+
+        #if defined(_OPENMP)
+            // Allocate storage for the per-thread solver walltime count.
+            solvertimes.resize(omp_get_max_threads(), 0.0);
+        #endif
     }
 
     void build_matrix(std::ptrdiff_t j_begin, std::ptrdiff_t j_end) noexcept
@@ -575,15 +590,18 @@ struct heat_equation_btcs
     {
         initialize();
 
-        high_resolution_timer t;
-   
-        double solvertime = 0.0;
+        timer t;
+
+        #if !defined(_OPENMP)
+            timer::value_type solvertime = 0.0;
+        #endif
  
         for (int s = 0; s < ns; ++s)
         {
             if (verify)
                 copy(r, u);
 
+            #pragma omp parallel for schedule(static) 
             for (int j = 0; j < ny; j += tw)
             {
                 std::ptrdiff_t const j_begin = j;
@@ -591,11 +609,15 @@ struct heat_equation_btcs
 
                 build_matrix(j_begin, j_end);
 
-                high_resolution_timer st;
+                timer st;
 
                 tridiagonal_solve_native(j_begin, j_end, a, b, c, u);
 
-                solvertime += st.elapsed();
+                #if defined(_OPENMP)
+                    solvertimes[omp_get_thread_num()] += st.elapsed();
+                #else
+                    solvertime += st.elapsed();
+                #endif
             }
 
             if (verify)
@@ -627,7 +649,16 @@ struct heat_equation_btcs
             }
         }
 
-        double const walltime = t.elapsed();
+        timer::value_type const walltime = t.elapsed();
+
+        #if defined(_OPENMP)
+            timer::value_type solvertime = 0.0;
+
+            for (timer::value_type t : solvertimes)
+                solvertime += t;
+
+            solvertime /= timer::value_type(omp_get_max_threads());
+        #endif
 
         double const l2 = l2_norm(ns);  
 
@@ -638,12 +669,13 @@ struct heat_equation_btcs
                 "Diffusion Coefficient (D),"
                 "X (Horizontal) Extent (nx),"
                 "Y (Horizontal) Extent (ny),"
-                "Z (Horizontal) Extent (nz),"
+                "Z (Vertical) Extent (nz),"
                 "Tile Width (tw),"
                 "# of Timesteps (ns),"
                 "Timestep Size (dt),"
-                "Wall Time [s],"
-                "Solver Time [s],"
+                "# of Threads,"
+                "Wall Time " << t.units() << ","
+                "Solver Time " << t.units() << ","
                 "L2 Norm"
                 ;
 
@@ -657,6 +689,11 @@ struct heat_equation_btcs
             << tw << ","
             << ns << ","
             << dt << ","
+            #if defined(_OPENMP)
+                << omp_get_max_threads() << ","
+            #else
+                << 1 << ","
+            #endif
             << std::setprecision(7) << walltime << ","
             << std::setprecision(7) << solvertime << ","
             << std::setprecision(17) << l2 << "\n"

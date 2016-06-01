@@ -29,6 +29,10 @@
 
 #include <mkl.h>
 
+#if defined(_OPENMP)
+    #include <omp.h>
+#endif
+
 #include "timers.hpp"
 #include "get_env_variable.hpp"
 #include "fp_utils.hpp"
@@ -213,6 +217,8 @@ inline void residual(
 
 struct heat_equation_btcs
 {
+    using timer = high_resolution_timer;
+
     bool verify;
     bool header;
 
@@ -233,15 +239,29 @@ struct heat_equation_btcs
 
     double A_coef;
 
-    decltype(make_aligned_array<double>(0)) a;
-    decltype(make_aligned_array<double>(0)) b;
-    decltype(make_aligned_array<double>(0)) c;
+    #if defined(_OPENMP)
+        std::vector<decltype(make_aligned_array<double>(0))> a;
+        std::vector<decltype(make_aligned_array<double>(0))> b;
+        std::vector<decltype(make_aligned_array<double>(0))> c;
+    #else
+        decltype(make_aligned_array<double>(0)) a;
+        decltype(make_aligned_array<double>(0)) b;
+        decltype(make_aligned_array<double>(0)) c;
+    #endif
 
     array3d<double, layout_left> u;
 
     array3d<double, layout_left> r;
 
-    decltype(make_aligned_array<double>(0)) u_buf;
+    #if defined(_OPENMP)
+        std::vector<decltype(make_aligned_array<double>(0))> u_buf;
+    #else
+        decltype(make_aligned_array<double>(0)) u_buf;
+    #endif
+
+    #if defined(_OPENMP)
+        std::vector<timer::value_type> solvertimes;
+    #endif
 
   public:
     heat_equation_btcs() noexcept
@@ -277,9 +297,22 @@ struct heat_equation_btcs
         A_coef = D * dt / (dz * dz);
 
         // Allocate storage for the matrix.
-        a = make_aligned_array<double>(nz - 1);
-        b = make_aligned_array<double>(nz);
-        c = make_aligned_array<double>(nz - 1);
+        #if defined(_OPENMP)
+            a.resize(omp_get_max_threads());
+            b.resize(omp_get_max_threads());
+            c.resize(omp_get_max_threads());
+
+            for (int tn = 0; tn < omp_get_max_threads(); ++tn)
+            {
+                a[tn] = make_aligned_array<double>(nz - 1);
+                b[tn] = make_aligned_array<double>(nz);
+                c[tn] = make_aligned_array<double>(nz - 1);
+            }
+        #else
+            a = make_aligned_array<double>(nz - 1);
+            b = make_aligned_array<double>(nz);
+            c = make_aligned_array<double>(nz - 1);
+        #endif
 
         // Allocate storage for the problem state and initialize it.
         u.resize(nx, ny, nz);
@@ -302,41 +335,88 @@ struct heat_equation_btcs
         r.resize(nx, ny, nz);
 
         // Allocate storage for gather buffers.
-        u_buf = make_aligned_array<double>(nz);
+        #if defined(_OPENMP)
+            u_buf.resize(omp_get_max_threads());
+
+            for (int tn = 0; tn < omp_get_max_threads(); ++tn)
+                u_buf[tn] = make_aligned_array<double>(nz);
+        #else
+            u_buf = make_aligned_array<double>(nz);
+        #endif
+
+        #if defined(_OPENMP)
+            // Allocate storage for the per-thread solver walltime count.
+            solvertimes.resize(omp_get_max_threads(), 0.0);
+        #endif
     }
 
-    void build_matrix() noexcept
-    {
-        double const ac_term = -A_coef;
-        double const b_term  = 1.0 + 2.0 * A_coef;
-
-        __assume(0 == (nz % 8)); 
-
-        double* bp = b.get();
-
-        __assume_aligned(bp, 64);
-
-        #pragma simd
-        for (int k = 0; k < nz; ++k)
-            bp[k] = b_term;
-
-        double* ap = a.get();
-        double* cp = c.get();
-
-        __assume_aligned(ap, 64);
-        __assume_aligned(cp, 64);
-
-        #pragma simd
-        for (int k = 0; k < nz - 1; ++k)
+    #if defined(_OPENMP)
+        void build_matrix(std::uint64_t tn) noexcept
         {
-            ap[k] = ac_term;
-            cp[k] = ac_term;
+            double const ac_term = -A_coef;
+            double const b_term  = 1.0 + 2.0 * A_coef;
+    
+            __assume(0 == (nz % 8)); 
+    
+            double* bp = b[tn].get();
+    
+            __assume_aligned(bp, 64);
+    
+            #pragma simd
+            for (int k = 0; k < nz; ++k)
+                bp[k] = b_term;
+    
+            double* ap = a[tn].get();
+            double* cp = c[tn].get();
+    
+            __assume_aligned(ap, 64);
+            __assume_aligned(cp, 64);
+    
+            #pragma simd
+            for (int k = 0; k < nz - 1; ++k)
+            {
+                ap[k] = ac_term;
+                cp[k] = ac_term;
+            }
+    
+            // Boundary conditions.
+            b[tn][0]      = 1.0; c[tn][0]      = 0.0;
+            a[tn][nz - 2] = 0.0; b[tn][nz - 1] = 1.0;
         }
-
-        // Boundary conditions.
-        b[0]      = 1.0; c[0]      = 0.0;
-        a[nz - 2] = 0.0; b[nz - 1] = 1.0;
-    }
+    #else
+        void build_matrix() noexcept
+        {
+            double const ac_term = -A_coef;
+            double const b_term  = 1.0 + 2.0 * A_coef;
+    
+            __assume(0 == (nz % 8)); 
+    
+            double* bp = b.get();
+    
+            __assume_aligned(bp, 64);
+    
+            #pragma simd
+            for (int k = 0; k < nz; ++k)
+                bp[k] = b_term;
+    
+            double* ap = a.get();
+            double* cp = c.get();
+    
+            __assume_aligned(ap, 64);
+            __assume_aligned(cp, 64);
+    
+            #pragma simd
+            for (int k = 0; k < nz - 1; ++k)
+            {
+                ap[k] = ac_term;
+                cp[k] = ac_term;
+            }
+    
+            // Boundary conditions.
+            b[0]      = 1.0; c[0]      = 0.0;
+            a[nz - 2] = 0.0; b[nz - 1] = 1.0;
+        }
+    #endif
 
     double l2_norm(std::uint64_t step) noexcept
     {
@@ -385,7 +465,11 @@ struct heat_equation_btcs
 
     double max_residual() noexcept
     {
-        residual(r, a, b, c, u);
+        #if defined(_OPENMP)
+            residual(r, a[0], b[0], c[0], u);
+        #else
+            residual(r, a, b, c, u);
+        #endif
 
         double mr = 0.0; 
 
@@ -431,28 +515,41 @@ struct heat_equation_btcs
     {
         initialize();
 
-        high_resolution_timer t;
+        timer t;
 
-        double solvertime = 0.0;
+        #if !defined(_OPENMP)
+            timer::value_type solvertime = 0.0;
+        #endif
 
         for (int s = 0; s < ns; ++s)
         {
             if (verify)
                 copy(r, u);
 
+            #pragma omp parallel for schedule(static) 
             for (int j = 0; j < ny; ++j)
                 for (int i = 0; i < nx; ++i)
                 {
-                    build_matrix();
+                    #if defined(_OPENMP)
+                        std::uint64_t const tn = omp_get_thread_num();
+ 
+                        build_matrix(tn);
+                    #else
+                        build_matrix();
+                    #endif
 
-                    high_resolution_timer st;
+                    timer st;
 
                     array3d<double, layout_left>::size_type const
                         stride = u.stride_z();
 
                     double* up = u(i, j, _); 
 
-                    double* u_bufp = u_buf.get();
+                    #if defined(_OPENMP)
+                        double* u_bufp = u_buf[tn].get();
+                    #else
+                        double* u_bufp = u_buf.get();
+                    #endif
 
                     __assume_aligned(up, 64);
 
@@ -474,13 +571,19 @@ struct heat_equation_btcs
                     int mkl_info = 0;
 
                     dgtsv_(
-                        &mkl_n,       // Matrix order.
-                        &mkl_nrhs,    // # of right hand sides.
-                        a.get(),      // Subdiagonal part.
-                        b.get(),      // Diagonal part.
-                        c.get(),      // Superdiagonal part.
-                        u_buf.get(),  // Column to solve.
-                        &mkl_ldb,     // Leading dimension of RHS.
+                        &mkl_n,           // Matrix order.
+                        &mkl_nrhs,        // # of right hand sides.
+                        #if defined(_OPENMP)
+                            a[tn].get(),  // Subdiagonal part.
+                            b[tn].get(),  // Diagonal part.
+                            c[tn].get(),  // Superdiagonal part.
+                        #else
+                            a.get(),      // Subdiagonal part.
+                            b.get(),      // Diagonal part.
+                            c.get(),      // Superdiagonal part.
+                        #endif
+                        u_bufp,           // Column to solve.
+                        &mkl_ldb,         // Leading dimension of RHS.
                         &mkl_info
                         );
 
@@ -496,12 +599,20 @@ struct heat_equation_btcs
                         up[ks] = u_bufp[k];
                     }
 
-                    solvertime += st.elapsed();
+                    #if defined(_OPENMP)
+                        solvertimes[tn] += st.elapsed();
+                    #else
+                        solvertime += st.elapsed();
+                    #endif
                 }
 
             if (verify)
             {
-                build_matrix();
+                #if defined(_OPENMP)
+                    build_matrix(0);
+                #else
+                    build_matrix();
+                #endif
 
                 double const resid = max_residual();
 
@@ -522,7 +633,16 @@ struct heat_equation_btcs
             }
         }
 
-        double const walltime = t.elapsed();
+        timer::value_type const walltime = t.elapsed();
+
+        #if defined(_OPENMP)
+            timer::value_type solvertime = 0.0;
+
+            for (timer::value_type t : solvertimes)
+                solvertime += t;
+
+            solvertime /= timer::value_type(omp_get_max_threads());
+        #endif
 
         double const l2 = l2_norm(ns);  
 
@@ -533,12 +653,13 @@ struct heat_equation_btcs
                 "Diffusion Coefficient (D),"
                 "X (Horizontal) Extent (nx),"
                 "Y (Horizontal) Extent (ny),"
-                "Z (Horizontal) Extent (nz),"
+                "Z (Vertical) Extent (nz),"
                 "Tile Width (tw),"
                 "# of Timesteps (ns),"
                 "Timestep Size (dt),"
-                "Wall Time [s],"
-                "Solver Time [s],"
+                "# of Threads,"
+                "Wall Time " << t.units() << ","
+                "Solver Time " << t.units() << ","
                 "L2 Norm"
                 ;
 
@@ -552,6 +673,11 @@ struct heat_equation_btcs
             << tw << ","
             << ns << ","
             << dt << ","
+            #if defined(_OPENMP)
+                << omp_get_max_threads() << ","
+            #else
+                << 1 << ","
+            #endif
             << std::setprecision(7) << walltime << ","
             << std::setprecision(7) << solvertime << ","
             << std::setprecision(17) << l2 << "\n"

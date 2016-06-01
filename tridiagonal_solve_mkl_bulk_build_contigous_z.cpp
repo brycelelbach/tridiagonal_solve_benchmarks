@@ -567,7 +567,7 @@ struct heat_equation_btcs
                 "Diffusion Coefficient (D),"
                 "X (Horizontal) Extent (nx),"
                 "Y (Horizontal) Extent (ny),"
-                "Z (Horizontal) Extent (nz),"
+                "Z (Vertical) Extent (nz),"
                 "Tile Width (tw),"
                 "# of Timesteps (ns),"
                 "Wall Time [s],"
