@@ -38,6 +38,7 @@ struct free_deleter
 template <
     typename T
   , std::uint64_t Alignment = 64
+  , typename = typename std::enable_if<is_power_of_2(Alignment)>::type
     >
 inline std::unique_ptr<T[], free_deleter<T> > make_aligned_array(
     std::ptrdiff_t size
@@ -53,6 +54,8 @@ inline std::unique_ptr<T[], free_deleter<T> > make_aligned_array(
     void* p = 0;
     int const r = ::posix_memalign(&p, Alignment, size * sizeof(T));
     assert(0 == r);
+
+    __assume_aligned(p, Alignment);
 
     std::memset(p, 0, size * sizeof(T));
 
