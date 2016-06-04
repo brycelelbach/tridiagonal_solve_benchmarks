@@ -1,5 +1,5 @@
 ###############################################################################
-# Copyright (c) 2015-6 Bryce Adelstein Lelbach aka wash <brycelelbach@gmail.com> #
+# Copyright (c) 2015-6 Bryce Adelstein Lelbach aka wash <brycelelbach@gmail.com>
 # Distributed under the Boost Software License, Version 1.0. (See accompanying
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 ###############################################################################
@@ -8,14 +8,27 @@
 # DEBUG=0|1    (default: 0)
 # STATIC=0|1   (default: 1 if not debug)
 # ASSERTS=0|1  (default: 1)
+# ARCH=AVX|AVX2 (default: AVX)
 
 CXX=icpc
 
+MKLFLAGS+=-mkl=sequential
+
 ifeq ($(NERSC_HOST),cori)
-  BUILD_TYPE=AVX2
-  CXXFLAGS+=-march=core-avx2 -DARCH_AVX2
+  ifeq ($(ARCH),)
+	ARCH=AVX2
+  endif
 endif
 ifeq ($(NERSC_HOST),edison)
+  ifeq ($(ARCH),)
+	ARCH=AVX
+  endif
+endif
+
+ifeq ($(ARCH),AVX2)
+  BUILD_TYPE=AVX2
+  CXXFLAGS+=-march=core-avx2 -DARCH_AVX2
+else
   BUILD_TYPE=AVX
   CXXFLAGS+=-mavx -DARCH_AVX
 endif
@@ -23,10 +36,8 @@ endif
 ifneq ($(PARALLEL),0) # PARALLEL == 1
   BUILD_TYPE:=$(BUILD_TYPE).PARALLEL
   CXXFLAGS+=-qopenmp
-  MKLFLAGS+=-mkl=parallel
 else                  # PARALLEL == 0
   BUILD_TYPE:=$(BUILD_TYPE).SERIAL
-  MKLFLAGS+=-mkl=sequential
 endif
 
 ifeq ($(DEBUG),1)     # DEBUG == 1
