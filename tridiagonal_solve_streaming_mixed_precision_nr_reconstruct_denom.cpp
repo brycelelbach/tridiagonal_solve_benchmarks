@@ -34,6 +34,7 @@
 #include "timers.hpp"
 #include "get_env_variable.hpp"
 #include "fp_utils.hpp"
+#include "array2d.hpp"
 #include "array3d.hpp"
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -292,6 +293,7 @@ inline void tridiagonal_solve_native(
   , array3d<double, layout_left>& b    // Diagonal
   , array3d<double, layout_left>& c    // Upper band
   , array3d<double, layout_left>& u    // Solution
+  , array2d<double, layout_left2d>& f  // Scratch space 
     ) noexcept
 {
     array3d<double, layout_left>::size_type const nx = u.nx();
@@ -311,165 +313,147 @@ inline void tridiagonal_solve_native(
     assert(u.ny()     == c.ny());
     assert(u.nz() - 1 == c.nz());
 
+    assert(u.nx()     == f.nx());
+    assert(u.ny()     == f.ny());
+
+    // Pre-Elimination: (j_end - j_begin) * (nx) iterations
+    for (int j = j_begin; j < j_end; ++j)
+    {
+        double* bbeginp = b(_, j, 0);
+
+        double* fp      = f(_, j);
+
+        __assume_aligned(bbeginp, 64);
+
+        __assume_aligned(fp, 64);
+
+        #pragma simd
+        for (int i = 0; i < nx; ++i)
+        {
+            // f = b[0];
+            fp[i] = bbeginp[i]; 
+        }
+    }
+
     // Forward Elimination: (nz - 1) * (j_end - j_begin) * (nx) iterations
-    ///
-    /// Sandybridge:
-    ///
-    ///    P0   P1
-    ///    MUL
-    ///    MUL  ADD
-    ///         ADD
-    ///
-    /// newton_raphson_divide + 2 * MUL + 2 * ADD [FLOPS per iteration]
-    /// newton_raphson_divide + 2 *   1 + 2 *   1 [FLOPS per iteration]
-    ///  2 + 3 * NRIterations +                 4 [FLOPS per iteration]
-    ///
-    /// THEORETICAL: 6 + 3 * NRIterations [FLOPS per iteration]
-    ///
-    /// Haswell:
-    ///
-    ///    P0   P1
-    ///    FMA  FMA
-    ///
-    /// newton_raphson_divide + FMA [FLOPS per iteration]
-    /// newton_raphson_divide +   1 [FLOPS per iteration]
-    ///  2 + 2 * NRIterations +   1 [FLOPS per iteration]
-    ///
-    /// THEORETICAL: 3 + 2 * NRIterations [FLOPS per iteration]
+    /// TODO
     for (int k = 1; k < nz; ++k)
         for (int j = j_begin; j < j_end; ++j)
         {
             double* asub1p = a(_, j, k - 1);
 
             double* bp     = b(_, j, k);
-            double* bsub1p = b(_, j, k - 1);
 
             double* csub1p = c(_, j, k - 1);
 
             double* up     = u(_, j, k);
             double* usub1p = u(_, j, k - 1);
 
+            double* fp     = f(_, j);
+
             __assume_aligned(asub1p, 64);
 
             __assume_aligned(bp, 64);
-            __assume_aligned(bsub1p, 64);
 
             __assume_aligned(csub1p, 64);
 
             __assume_aligned(up, 64);
             __assume_aligned(usub1p, 64);
 
+            __assume_aligned(fp, 64);
+
             #pragma simd
             for (int i = 0; i < nx; ++i)
             {
-                /// Sandybridge:
-                /// m0    = newton_raphson_divide();
-                /// t0    = m0 * csub1p[i];          MUL (dep m0)
-                /// bp[i] = bp[i] - t0;              ADD (dep t0)
-                /// t1    = m0 * usub1p[i];          MUL (dep m0)
-                /// up[i] = up[i] - t1;              ADD (dep t1) 
-                ///
-                /// Haswell:
-                /// m0    = newton_raphson_divide();
-                /// bp[i] = - m0 * csubp[i] + bp[i]; FMA (dep m0)
-                /// up[i] = - m0 * usubp[i] + up[i]; FMA (dep m0)
+                /// TODO
                 
-                // double const m0 = a[k - 1] / b[k - 1];
-                // b[k] -= m0 * c[k - 1];
-                // u[k] -= m0 * u[k - 1];
-                double const m0 = newton_raphson_divide(asub1p[i], bsub1p[i]);
+                // double const m = a[k - 1] / f;
+                // f = b[k] - m * c[k - 1];
+                // u[k] -= m * u[k - 1];
+                double const m0 = newton_raphson_divide(asub1p[i], fp[i]);
                 double const u0 = up[i] - m0 * usub1p[i];
-                bp[i] -= m0 * csub1p[i];
+                fp[i] = bp[k] - m0 * csub1p[i];
                 up[i] = u0;
+
+/*
+                if ((0 == j) && (0 == i))
+                {
+                    std::cout << "(" << i << ", " << j << ", " << k << ") f == " << fp[i] << "\n";
+                }
+*/
             }
         }
 
     // Pre-Substitution: (j_end - j_begin) * (nx) iterations
-    ///
-    /// Sandybridge:
-    ///
-    /// newton_raphson_divide [FLOPS per iteration]
-    ///
-    /// THEORETICAL: 2 + 3 * NRIterations [FLOPS per iteration]
-    ///
-    /// Haswell:
-    ///
-    /// newton_raphson_divide [FLOPS per iteration]
-    ///
-    /// THEORETICAL: 2 + 2 * NRIterations [FLOPS per iteration]
+    /// TODO
     for (int j = j_begin; j < j_end; ++j)
     {
-        double* bendp = b(_, j, nz - 1);
-
         double* uendp = u(_, j, nz - 1);
 
-        __assume_aligned(bendp, 64);
+        double* fp    = f(_, j);
 
         __assume_aligned(uendp, 64);
+
+        __assume_aligned(fp, 64);
 
         #pragma simd
         for (int i = 0; i < nx; ++i)
         {
-            // u[nz - 1] = u[nz - 1] / b[nz - 1];
-            uendp[i] = newton_raphson_divide(uendp[i], bendp[i]);
+            // u[nz - 1] = u[nz - 1] / f;
+            uendp[i] = newton_raphson_divide(uendp[i], fp[i]);
         }
     }
  
     // Back Substitution: (nz - 1) * (j_end - j_begin) * (nx) iterations
-    ///
-    /// Sandybridge:
-    ///
-    ///    P0   P1
-    ///    MUL
-    ///         ADD
-    ///
-    /// MUL + ADD + newton_raphson_divide [FLOPS per iteration]
-    ///   1 +   1 + newton_raphson_divide [FLOPS per iteration]
-    ///         2 +  2 + 3 * NRIterations [FLOPS per iteration]
-    ///
-    /// THEORETICAL: 4 + 3 * NRIterations [FLOPS per iteration]
-    ///
-    /// Haswell:
-    ///
-    ///    P0   P1
-    ///    FMA
-    ///
-    /// FMA + newton_raphson_divide [FLOPS per iteration]
-    ///   1 + newton_raphson_divide [FLOPS per iteration]
-    ///   1 +  2 + 2 * NRIterations [FLOPS per iteration]
-    ///
-    /// THEORETICAL: 3 + 2 * NRIterations [FLOPS per iteration] 
+    /// TODO
     for (int k = nz - 2; k >= 0; --k)
         for (int j = j_begin; j < j_end; ++j)
         {
-            double* bp     = b(_, j, k);
+            double* ap     = a(_, j, k);
+
+            double* badd1p = b(_, j, k + 1);
 
             double* cp     = c(_, j, k);
 
             double* up     = u(_, j, k);
             double* uadd1p = u(_, j, k + 1);
 
-            __assume_aligned(bp, 64);
+            double* fp     = f(_, j);
+
+            __assume_aligned(ap, 64);
+
+            __assume_aligned(badd1p, 64);
 
             __assume_aligned(cp, 64);
 
             __assume_aligned(up, 64);
             __assume_aligned(uadd1p, 64);
 
+            __assume_aligned(fp, 64);
+
             #pragma simd
             for (int i = 0; i < nx; ++i)
             {
-                /// Sandybridge:
-                /// t0  = cp[i] * uadd1p[i];            MUL 
-                /// num = up[i] - t0;                   ADD (dep t0)
-                /// newton_raphson_divide();            (dep num)
-                /// 
-                /// Haswell:
-                /// num = - cp[i] * uadd1p[i] + up[i];  FMA
-                /// newton_raphson_divide();            (dep num)
+                /// TODO
 
-                // u[k] = (u[k] - c[k] * u[k + 1]) / b[k];
-                up[i] = newton_raphson_divide(up[i] - cp[i] * uadd1p[i], bp[i]);
+                if ((nz - 2 == k) && (0 == j) && (0 == i))
+                {
+                    std::cout << std::setprecision(17)
+                              << "(" << i << ", " << j << ", " << k << ") "
+                              <<   "a(i, j, k) == " << a(i, j, k)
+                              << ", b(i, j, k) == " << b(i, j, k)
+                              << ", b(i, j, k + 1) == " << b(i, j, k + 1)
+                              << ", c(i, j, k) == " << c(i, j, k)
+                              << ", f(i, j) == " << f(i, j)
+                              << "\n";
+                }
+
+                // f = (a[k] * c[k]) / (b[k + 1] - f);
+                // double const l = u[k] - c[k] * u[k + 1];
+                // u[k] = l / f;
+                fp[i] = newton_raphson_divide(ap[i] * cp[i], badd1p[i] - fp[i]);
+                double const l = up[i] - cp[i] * uadd1p[i];
+                up[i] = newton_raphson_divide(l, fp[i]);
             }
         }
 }
@@ -507,6 +491,8 @@ struct heat_equation_btcs
     array3d<double, layout_left> u;
 
     array3d<double, layout_left> r;
+
+    array2d<double, layout_left2d> f;
 
     #if defined(_OPENMP)
         std::vector<timer::value_type> solvertimes;
@@ -571,6 +557,9 @@ struct heat_equation_btcs
             // Allocate storage for the per-thread solver walltime count.
             solvertimes.resize(omp_get_max_threads(), 0.0);
         #endif
+
+        // Allocate storage for solver scratch space.
+        f.resize(nx, ny);
     }
 
     void build_matrix(std::ptrdiff_t j_begin, std::ptrdiff_t j_end) noexcept
@@ -747,7 +736,7 @@ struct heat_equation_btcs
 
                 timer st;
 
-                tridiagonal_solve_native(j_begin, j_end, a, b, c, u);
+                tridiagonal_solve_native(j_begin, j_end, a, b, c, u, f);
 
                 #if defined(_OPENMP)
                     solvertimes[omp_get_thread_num()] += st.elapsed();
@@ -816,7 +805,7 @@ struct heat_equation_btcs
                 ;
 
         std::cout
-            << "Streaming Mixed Precision NR,"
+            << "Streaming Mixed Precision NR Reconstructed Denominator,"
             << BUILD_TYPE << ","
             << D << ","
             << nx << ","
