@@ -55,7 +55,11 @@ inline std::unique_ptr<T[], free_deleter<T> > make_aligned_array(
     int const r = ::posix_memalign(&p, Alignment, size * sizeof(T));
     assert(0 == r);
 
-    __assume_aligned(p, Alignment);
+    #if defined(__INTEL_COMPILER) && __INTEL_COMPILER >= 1700
+        // Prior versions of ICPC won't accept a non-type template argument
+        // as a parameter to __assume_aligned().
+        __assume_aligned(p, Alignment);
+    #endif
 
     std::memset(p, 0, size * sizeof(T));
 
