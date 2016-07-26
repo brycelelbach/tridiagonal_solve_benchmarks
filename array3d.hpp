@@ -23,37 +23,49 @@ struct layout_left
 
   private:
     size_type nx_, ny_, nz_;
+    size_type px_, py_, pz_;
 
   public:
-    constexpr layout_left() noexcept : nx_(0), ny_(0), nz_(0) {}
+    constexpr layout_left() noexcept
+      : nx_(0), ny_(0), nz_(0), px_(0), py_(0), pz_(0)
+    {}
 
-    constexpr layout_left(size_type nx, size_type ny, size_type nz) noexcept
-      : nx_(nx), ny_(ny), nz_(nz)
+    constexpr layout_left(
+        size_type nx, size_type ny, size_type nz
+        ) noexcept
+      : nx_(nx), ny_(ny), nz_(nz), px_(0), py_(0), pz_(0)
+    {}
+
+    constexpr layout_left(
+        size_type nx, size_type ny, size_type nz
+      , size_type px, size_type py, size_type pz
+        ) noexcept
+      : nx_(nx), ny_(ny), nz_(nz), px_(px), py_(py), pz_(pz)
     {}
 
     constexpr size_type operator()(
         size_type i, size_type j, size_type k
         ) const noexcept
     {
-        return i + nx_ * j + nx_ * ny_ * k;
+        return stride_x() * i + stride_y() * j + stride_z() * k;
     }
     constexpr size_type operator()(
         placeholder, size_type j, size_type k
         ) const noexcept
     {
-        return nx_ * j + nx_ * ny_ * k;
+        return stride_y() * j + stride_z() * k;
     }
     constexpr size_type operator()(
         size_type i, placeholder, size_type k
         ) const noexcept
     {
-        return i + nx_ * ny_ * k;
+        return stride_x() * i + stride_z() * k;
     }
     constexpr size_type operator()(
         size_type i, size_type j, placeholder
         ) const noexcept
     {
-        return i + nx_ * j;
+        return stride_x() * i + stride_y() * j;
     }    
 
     constexpr size_type stride_x() const noexcept
@@ -62,11 +74,11 @@ struct layout_left
     }
     constexpr size_type stride_y() const noexcept
     {
-        return nx_;
+        return (nx_ + px_);
     }
     constexpr size_type stride_z() const noexcept
     {
-        return nx_ * ny_;
+        return (((nx_ + px_) * ny_) + py_);
     }
 
     constexpr size_type nx() const noexcept
@@ -80,6 +92,15 @@ struct layout_left
     constexpr size_type nz() const noexcept
     {
         return nz_;
+    }
+
+    constexpr size_type span() const noexcept
+    {
+        return (nx_ * ny_ * nz_)
+             + stride_x() * px_  
+             + stride_y() * py_ 
+             + stride_z() * pz_
+            ;  
     }
 };
 
@@ -89,46 +110,58 @@ struct layout_right
 
   private:
     size_type nx_, ny_, nz_;
+    size_type px_, py_, pz_;
 
   public:
-    constexpr layout_right() noexcept : nx_(0), ny_(0), nz_(0) {}
+    constexpr layout_right() noexcept
+      : nx_(0), ny_(0), nz_(0), px_(0), py_(0), pz_(0)
+    {}
 
-    constexpr layout_right(size_type nx, size_type ny, size_type nz) noexcept
-      : nx_(nx), ny_(ny), nz_(nz)
+    constexpr layout_right(
+        size_type nx, size_type ny, size_type nz
+        ) noexcept
+      : nx_(nx), ny_(ny), nz_(nz), px_(0), py_(0), pz_(0)
+    {}
+
+    constexpr layout_right(
+        size_type nx, size_type ny, size_type nz
+      , size_type px, size_type py, size_type pz
+        ) noexcept
+      : nx_(nx), ny_(ny), nz_(nz), px_(px), py_(py), pz_(pz)
     {}
 
     constexpr size_type operator()(
         size_type i, size_type j, size_type k
         ) const noexcept
     {
-        return nz_ * ny_ * i + nz_ * j + k;
+        return stride_x() * i + stride_y() * j + stride_z() * k;
     }
     constexpr size_type operator()(
         placeholder, size_type j, size_type k
         ) const noexcept
     {
-        return nz_ * j + k;
+        return stride_y() * j + stride_z() * k;
     }
     constexpr size_type operator()(
         size_type i, placeholder, size_type k
         ) const noexcept
     {
-        return nz_ * ny_ * i + k;
+        return stride_x() * i + stride_z() * k;
     }
     constexpr size_type operator()(
         size_type i, size_type j, placeholder
         ) const noexcept
     {
-        return nz_ * ny_ * i + nz_ * j;
-    }
+        return stride_x() * i + stride_y() * j;
+    }    
 
     constexpr size_type stride_x() const noexcept
     {
-        return nz_ * ny_;
+        return (((nz_ + pz_) * ny_) + py_);
     }
     constexpr size_type stride_y() const noexcept
     {
-        return nz_;
+        return (nz_ + pz_);
     }
     constexpr size_type stride_z() const noexcept
     {
@@ -146,6 +179,15 @@ struct layout_right
     constexpr size_type nz() const noexcept
     {
         return nz_;
+    }
+
+    constexpr size_type span() const noexcept
+    {
+        return (nx_ * ny_ * nz_)
+             + stride_x() * px_  
+             + stride_y() * py_ 
+             + stride_z() * pz_
+            ;  
     }
 };
 
@@ -160,22 +202,44 @@ struct array3d
     using value_type = T;
 
   private:
-    decltype(make_aligned_array<T, Alignment>(0)) data_;
     Layout layout_;
+    decltype(make_aligned_array<T, Alignment>(0)) data_;
 
   public:
-    constexpr array3d() noexcept : data_(), layout_() {}
+    constexpr array3d() noexcept : layout_(), data_() {}
 
-    array3d(size_type nx, size_type ny, size_type nz) noexcept
-      : layout_(nx, ny, nz)
+    array3d(
+        size_type nx, size_type ny, size_type nz
+        ) noexcept
+      : layout_(), data_()
     {
-        resize(nx(), ny(), nz());
+        resize(nx, ny, nz);
     }
 
-    void resize(size_type nx, size_type ny, size_type nz) noexcept
+    array3d(
+        size_type nx, size_type ny, size_type nz
+      , size_type px, size_type py, size_type pz
+        ) noexcept
+      : layout_(), data_()
     {
-        data_   = make_aligned_array<T, Alignment>(nx * ny * nz);
+        resize(nx, ny, nz, px, py, pz);
+    }
+
+    void resize(
+        size_type nx, size_type ny, size_type nz
+        ) noexcept
+    {
         layout_ = Layout(nx, ny, nz);
+        data_   = make_aligned_array<T, Alignment>(layout_.span());
+    }
+
+    void resize(
+        size_type nx, size_type ny, size_type nz
+      , size_type px, size_type py, size_type pz
+        ) noexcept
+    {
+        layout_ = Layout(nx, ny, nz, px, py, pz);
+        data_   = make_aligned_array<T, Alignment>(layout_.span());
     }
 
     T* data() const noexcept
@@ -247,6 +311,11 @@ struct array3d
     constexpr size_type nz() const noexcept
     {
         return layout_.nz();
+    }
+
+    constexpr size_type span() const noexcept
+    {
+        return layout_.span();
     }
 };
 
