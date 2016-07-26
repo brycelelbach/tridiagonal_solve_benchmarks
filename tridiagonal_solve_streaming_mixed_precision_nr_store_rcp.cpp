@@ -36,18 +36,25 @@
 #include "fp_utils.hpp"
 #include "array3d.hpp"
 
+using a_array_type = array3d<double, layout_left, ARRAYALIGN>;
+using b_array_type = array3d<double, layout_left, ARRAYALIGN + 1*ARRAYPAD>;
+using c_array_type = array3d<double, layout_left, ARRAYALIGN + 2*ARRAYPAD>;
+using u_array_type = array3d<double, layout_left, ARRAYALIGN + 3*ARRAYPAD>;
+using r_array_type = array3d<double, layout_left, ARRAYALIGN>;
+
 ///////////////////////////////////////////////////////////////////////////////
 // dest = src
 
+template <typename Size, std::size_t DestAlign, std::size_t SrcAlign>
 inline void copy(
-    array3d<double, layout_left>::size_type j_begin
-  , array3d<double, layout_left>::size_type j_end
-  , array3d<double, layout_left>& dest
-  , array3d<double, layout_left> const& src
+    Size j_begin
+  , Size j_end
+  , array3d<double, layout_left, DestAlign>& dest
+  , array3d<double, layout_left, SrcAlign> const& src
     ) noexcept
 {
-    array3d<double, layout_left>::size_type const nx = src.nx();
-    array3d<double, layout_left>::size_type const nz = src.nz();
+    auto const nx = src.nx();
+    auto const nz = src.nz();
 
     __assume(0 == (nx % 8)); 
 
@@ -70,35 +77,38 @@ inline void copy(
         }
 }
 
+template <std::size_t DestAlign, std::size_t SrcAlign>
 inline void copy(
-    array3d<double, layout_left>& dest
-  , array3d<double, layout_left> const& src
+    array3d<double, layout_left, DestAlign>& dest
+  , array3d<double, layout_left, SrcAlign> const& src
     ) noexcept
 {
-    copy(0, src.ny(), dest, src);
+    using size_type =
+        typename array3d<double, layout_left, SrcAlign>::size_type;
+    copy(size_type(0), src.ny(), dest, src);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
 // r = A*u - r
 
 inline void residual(
-    array3d<double, layout_left>::size_type j_begin
-  , array3d<double, layout_left>::size_type j_end
-  , array3d<double, layout_left>& r       // Residual
-  , array3d<double, layout_left> const& a // Lower band
-  , array3d<double, layout_left> const& b // Diagonal
-  , array3d<double, layout_left> const& c // Upper band
-  , array3d<double, layout_left> const& u // Solution
+    u_array_type::size_type j_begin
+  , u_array_type::size_type j_end
+  , r_array_type& r       // Residual
+  , a_array_type const& a // Lower band
+  , b_array_type const& b // Diagonal
+  , c_array_type const& c // Upper band
+  , u_array_type const& u // Solution
     ) noexcept
 {
-    array3d<double, layout_left>::size_type const nx = r.nx();
-    array3d<double, layout_left>::size_type const nz = r.nz();
+    auto const nx = r.nx();
+    auto const nz = r.nz();
 
     __assume(0 == (nx % 8)); 
 
     assert(r.nx()     == a.nx());
     assert(r.ny()     == a.ny());
-    assert(r.nz() - 1 == a.nz());
+    assert(r.nz()     == a.nz());
 
     assert(r.nx()     == b.nx());
     assert(r.ny()     == b.ny());
@@ -106,7 +116,7 @@ inline void residual(
 
     assert(r.nx()     == c.nx());
     assert(r.ny()     == c.ny());
-    assert(r.nz() - 1 == c.nz());
+    assert(r.nz()     == c.nz());
 
     assert(r.nx()     == u.nx());
     assert(r.ny()     == u.ny());
@@ -218,11 +228,11 @@ inline void residual(
 }
 
 inline void residual(
-    array3d<double, layout_left>& r       // Residual
-  , array3d<double, layout_left> const& a // Lower band
-  , array3d<double, layout_left> const& b // Diagonal
-  , array3d<double, layout_left> const& c // Upper band
-  , array3d<double, layout_left> const& u // Solution
+    r_array_type& r       // Residual
+  , a_array_type const& a // Lower band
+  , b_array_type const& b // Diagonal
+  , c_array_type const& c // Upper band
+  , u_array_type const& u // Solution
     ) noexcept
 {
     residual(0, r.ny(), r, a, b, c, u);
@@ -286,22 +296,22 @@ inline double newton_raphson_divide(double num, double den) noexcept
 }
 
 inline void tridiagonal_solve_native(
-    array3d<double, layout_left>::size_type j_begin
-  , array3d<double, layout_left>::size_type j_end
-  , array3d<double, layout_left>& a    // Lower band
-  , array3d<double, layout_left>& b    // Diagonal
-  , array3d<double, layout_left>& c    // Upper band
-  , array3d<double, layout_left>& u    // Solution
+    u_array_type::size_type j_begin
+  , u_array_type::size_type j_end
+  , a_array_type& a    // Lower band
+  , b_array_type& b    // Diagonal
+  , c_array_type& c    // Upper band
+  , u_array_type& u    // Solution
     ) noexcept
 {
-    array3d<double, layout_left>::size_type const nx = u.nx();
-    array3d<double, layout_left>::size_type const nz = u.nz();
+    auto const nx = u.nx();
+    auto const nz = u.nz();
 
     __assume(0 == (nx % 8)); 
 
     assert(u.nx()     == a.nx());
     assert(u.ny()     == a.ny());
-    assert(u.nz() - 1 == a.nz());
+    assert(u.nz()     == a.nz());
 
     assert(u.nx()     == b.nx());
     assert(u.ny()     == b.ny());
@@ -309,7 +319,7 @@ inline void tridiagonal_solve_native(
 
     assert(u.nx()     == c.nx());
     assert(u.ny()     == c.ny());
-    assert(u.nz() - 1 == c.nz());
+    assert(u.nz()     == c.nz());
 
     // Pre-Elimination: (j_end - j_begin) * (nx) iterations
     /// TODO
@@ -444,13 +454,13 @@ struct heat_equation_btcs
 
     double A_coef;
 
-    array3d<double, layout_left> a;
-    array3d<double, layout_left> b;
-    array3d<double, layout_left> c;
+    a_array_type a;
+    b_array_type b;
+    c_array_type c;
 
-    array3d<double, layout_left> u;
+    u_array_type u;
 
-    array3d<double, layout_left> r;
+    r_array_type r;
 
     #if defined(_OPENMP)
         std::vector<timer::value_type> solvertimes;
@@ -486,13 +496,15 @@ struct heat_equation_btcs
         // Compute matrix constant.
         A_coef = D * dt / (dz * dz);
 
-        // Allocate storage for the matrix.
-        a.resize(nx, ny, nz - 1);
-        b.resize(nx, ny, nz);
-        c.resize(nx, ny, nz - 1);
+        // Allocate storage for the matrix. a and c technically have dimensions
+        // of nx * ny * (nz - 1), but we make then nx * ny * nz to simplify the
+        // padding math.
+        a.resize(nx, ny, nz, 0, NYPAD, 0);
+        b.resize(nx, ny, nz, 0, NYPAD, 0);
+        c.resize(nx, ny, nz, 0, NYPAD, 0);
 
         // Allocate storage for the problem state and initialize it.
-        u.resize(nx, ny, nz);
+        u.resize(nx, ny, nz, 0, NYPAD, 0);
 
         __assume(0 == (nx % 8));
 
@@ -588,8 +600,7 @@ struct heat_equation_btcs
 
                 double const* up = u(i, j, _);
 
-                array3d<double, layout_left>::size_type const
-                    stride = u.stride_z();
+                auto const stride = u.stride_z();
 
                 __assume_aligned(up, 64);
 
@@ -597,8 +608,7 @@ struct heat_equation_btcs
                 #pragma simd
                 for (int k = 0; k < nz; ++k)
                 {
-                    array3d<double, layout_left>::size_type const
-                        ks = k * stride;
+                    auto const ks = k * stride;
 
                     double const exact = std::exp( -D * (N * N)
                                                  * (M_PI * M_PI) * (dt * step))
@@ -636,8 +646,7 @@ struct heat_equation_btcs
 
                 double const* rp = r(i, j, _);
 
-                array3d<double, layout_left>::size_type const
-                    stride = r.stride_z();
+                auto const stride = r.stride_z();
 
                 __assume_aligned(rp, 64);
 
@@ -645,8 +654,7 @@ struct heat_equation_btcs
                 #pragma simd
                 for (int k = 0; k < nz; ++k)
                 {
-                    array3d<double, layout_left>::size_type const
-                        ks = k * stride;
+                    auto const ks = k * stride;
 
                     min = std::min(min, rp[ks]);
                     max = std::max(max, rp[ks]);
@@ -688,6 +696,13 @@ struct heat_equation_btcs
                 std::ptrdiff_t const j_end   = j + tw;
 
                 build_matrix(j_begin, j_end);
+            }
+
+            #pragma omp parallel for schedule(static)
+            for (int j = 0; j < ny; j += tw)
+            {
+                std::ptrdiff_t const j_begin = j;
+                std::ptrdiff_t const j_end   = j + tw;
 
                 timer st;
 
