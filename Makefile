@@ -4,11 +4,14 @@
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 ###############################################################################
 
-# PARALLEL=0|1 (default: 1)
-# DEBUG=0|1    (default: 0)
-# STATIC=0|1   (default: 1 if not debug)
-# ASSERTS=0|1  (default: 1)
-# ARCH=AVX|AVX2 (default: AVX)
+# PARALLEL=0|1         (default: 1)
+# DEBUG=0|1            (default: 0)
+# STATIC=0|1           (default: 1 if not debug)
+# ASSERTS=0|1          (default: 1)
+# ARCH=AVX|AVX2|AVX512 (default: AVX)
+# ARRAYALIGN=<bytes>   (default: 1048576)
+# ARRAYPAD=<bytes>     (default: 9216)
+# NYPAD=<bytes>        (default: 1152)
 
 CXX=icpc
 
@@ -25,12 +28,39 @@ ifeq ($(NERSC_HOST),edison)
   endif
 endif
 
-ifeq ($(ARCH),AVX2)
+ifeq ($(ARCH),AVX512)
+  BUILD_TYPE=AVX512
+  CXXFLAGS+=-xMIC-AVX512 -DARCH_AVX512
+else ifeq ($(ARCH),AVX2)
   BUILD_TYPE=AVX2
-  CXXFLAGS+=-march=core-avx2 -DARCH_AVX2
+  CXXFLAGS+=-xCORE-AVX2 -DARCH_AVX2
 else
   BUILD_TYPE=AVX
-  CXXFLAGS+=-mavx -DARCH_AVX
+  CXXFLAGS+=-xAVX -DARCH_AVX
+endif
+
+ifeq ($(ARRAYALIGN),)
+  BUILD_TYPE:=$(BUILD_TYPE).ARRAYALIGN-1048576
+  CXXFLAGS+=-DARRAYALIGN=1048576
+else
+  BUILD_TYPE:=$(BUILD_TYPE).ARRAYALIGN-$(ARRAYALIGN)
+  CXXFLAGS+=-DARRAYALIGN=$(ARRAYALIGN)
+endif
+
+ifeq ($(ARRAYPAD),)
+  BUILD_TYPE:=$(BUILD_TYPE).ARRAYPAD-9216
+  CXXFLAGS+=-DARRAYPAD=9216
+else
+  BUILD_TYPE:=$(BUILD_TYPE).ARRAYPAD-$(ARRAYPAD)
+  CXXFLAGS+=-DARRAYPAD=$(ARRAYPAD)
+endif
+
+ifeq ($(NYPAD),)
+  BUILD_TYPE:=$(BUILD_TYPE).NYPAD-1152
+  CXXFLAGS+=-DNYPAD=1152
+else
+  BUILD_TYPE:=$(BUILD_TYPE).NYPAD-$(NYPAD)
+  CXXFLAGS+=-DNYPAD=$(NYPAD)
 endif
 
 ifneq ($(PARALLEL),0) # PARALLEL == 1
@@ -95,19 +125,19 @@ clean:
 .PHONY: directory asm clean
 
 % : %.cpp directory
-	@printf '*%.0s' {1..80}; echo
+	@echo "********************************************************************************"
 	@echo "Building $(*F)"
 	$(CXX) $(if $(findstring mkl,$<),$(MKLFLAGS) $(CXXFLAGS),$(CXXFLAGS)) $< -o $(CURDIR)/build/$(*F)
-	@printf '*%.0s' {1..80}; echo
+	@echo "********************************************************************************"
 	@echo "Running $(*F)"
 	@OMP_NUM_THREADS=1 build/$(*F)
 	@echo
 
 %.asm : %.cpp directory
-	@printf '*%.0s' {1..80}; echo
+	@echo "********************************************************************************"
 	@echo "Generating assembly for $(*F)"
 	$(CXX) $(if $(findstring mkl,$<),$(MKLFLAGS) $(CXXFLAGS),$(CXXFLAGS)) $(ASMFLAGS) -S $< -o $(CURDIR)/build/$(*F).asm
-	@printf '*%.0s' {1..80}; echo
+	@echo "********************************************************************************"
 	@echo "Generating optimization report for $(*F)"
 	$(CXX) $(if $(findstring mkl,$<),$(MKLFLAGS) $(CXXFLAGS),$(CXXFLAGS)) $(OPTREPORTFLAGS) $< -o $(CURDIR)/build/$(*F)
 	@echo
