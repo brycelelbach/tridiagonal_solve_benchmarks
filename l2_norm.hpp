@@ -35,19 +35,13 @@ inline T l2_norm(array3d<T, layout_left> const& u, Exact&& exact) noexcept
 
             auto const stride = u.stride_z();
 
-            TSB_ASSUME_ALIGNED(up, 8);
+            TSB_ASSUME_ALIGNED(up, sizeof(T));
 
             // NOTE: Strided access.
             #pragma simd
             for (auto k = 0; k < nz; ++k)
             {
                 auto const ks = k * stride;
-
-/*
-                if ((i == 0) && (j == 0))
-                    std::cout << "u(0, 0, " << k << ") = "
-                              << std::setprecision(17) << up[ks] << "\n";
-*/
 
                 T const abs_term = std::fabs(up[ks] - exact(k));
                 sum = sum + abs_term * abs_term;

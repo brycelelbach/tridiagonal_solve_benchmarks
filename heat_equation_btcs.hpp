@@ -12,7 +12,6 @@
 #include <algorithm>
 
 #include <cmath>
-#include <cfenv>
 #include <cassert>
 #include <cstdio>
 #include <cstdint>
@@ -42,7 +41,7 @@ template <
     typename Derived
   , typename Timer = high_resolution_timer
 >
-struct heat_equation_btcs
+struct heat_equation_btcs : enable_fp_exceptions
 {
     using matrix = typename solver_traits<Derived>::matrix;
  
@@ -130,7 +129,8 @@ struct heat_equation_btcs
 
   public:
     heat_equation_btcs() noexcept
-      : verify(get_env_variable<bool>("verify", false))
+      : enable_fp_exceptions()
+      , verify(get_env_variable<bool>("verify", false))
       , header(get_env_variable<bool>("header", false))
       , nx(get_env_variable<size_type>("nx", 32))
       , ny(get_env_variable<size_type>("ny", 2048))

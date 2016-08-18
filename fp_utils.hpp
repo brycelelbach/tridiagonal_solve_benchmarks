@@ -11,6 +11,18 @@
 #include <type_traits>
 #include <limits>
 
+#include <cfenv>
+
+struct enable_fp_exceptions
+{
+    enable_fp_exceptions()
+    {
+        ::feenableexcept(FE_DIVBYZERO);
+        ::feenableexcept(FE_INVALID);
+        ::feenableexcept(FE_OVERFLOW);
+    }
+};
+
 template <typename T>
 constexpr bool fp_equals(
     T x, T y, T epsilon = std::numeric_limits<T>::epsilon()

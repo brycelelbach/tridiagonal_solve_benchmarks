@@ -48,7 +48,7 @@ inline T max_residual(
 
             auto const stride = r.stride_z();
 
-            TSB_ASSUME_ALIGNED(rp, 8);
+            TSB_ASSUME_ALIGNED(rp, sizeof(T));
 
             // NOTE: Strided access.
             #pragma simd

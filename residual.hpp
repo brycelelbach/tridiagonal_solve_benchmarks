@@ -15,14 +15,15 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 
+template <typename T>
 inline void residual(
-    array3d<double, layout_left>::size_type j_begin
-  , array3d<double, layout_left>::size_type j_end
-  , array3d<double, layout_left>& r       // Residual
-  , array3d<double, layout_left> const& a // Lower band
-  , array3d<double, layout_left> const& b // Diagonal
-  , array3d<double, layout_left> const& c // Upper band
-  , array3d<double, layout_left> const& u // Solution
+    typename array3d<T, layout_left>::size_type j_begin
+  , typename array3d<T, layout_left>::size_type j_end
+  , array3d<T, layout_left>& r       // Residual
+  , array3d<T, layout_left> const& a // Lower band
+  , array3d<T, layout_left> const& b // Diagonal
+  , array3d<T, layout_left> const& c // Upper band
+  , array3d<T, layout_left> const& u // Solution
     ) noexcept
 {
     auto const nx = r.nx();
@@ -49,14 +50,14 @@ inline void residual(
     // First row.
     for (int j = j_begin; j < j_end; ++j)
     {
-        double* __restrict__       r0p = r(_, j, 0);
+        T* __restrict__       r0p = r(_, j, 0);
 
-        double const* __restrict__ b0p = b(_, j, 0);
+        T const* __restrict__ b0p = b(_, j, 0);
 
-        double const* __restrict__ c0p = c(_, j, 0);
+        T const* __restrict__ c0p = c(_, j, 0);
 
-        double const* __restrict__ u0p = u(_, j, 0);
-        double const* __restrict__ u1p = u(_, j, 1);
+        T const* __restrict__ u0p = u(_, j, 0);
+        T const* __restrict__ u1p = u(_, j, 1);
 
         TSB_ASSUME_ALIGNED(r0p, 64);
 
@@ -80,17 +81,17 @@ inline void residual(
     for (int k = 1; k < nz - 1; ++k)
         for (int j = j_begin; j < j_end; ++j)
         {
-            double* __restrict__       rp     = r(_, j, k);
+            T* __restrict__       rp     = r(_, j, k);
 
-            double const* __restrict__ asub1p = a(_, j, k - 1);
+            T const* __restrict__ asub1p = a(_, j, k - 1);
 
-            double const* __restrict__ bp     = b(_, j, k);
+            T const* __restrict__ bp     = b(_, j, k);
 
-            double const* __restrict__ cp     = c(_, j, k);
+            T const* __restrict__ cp     = c(_, j, k);
 
-            double const* __restrict__ usub1p = u(_, j, k - 1);
-            double const* __restrict__ up     = u(_, j, k);
-            double const* __restrict__ uadd1p = u(_, j, k + 1);
+            T const* __restrict__ usub1p = u(_, j, k - 1);
+            T const* __restrict__ up     = u(_, j, k);
+            T const* __restrict__ uadd1p = u(_, j, k + 1);
 
             TSB_ASSUME_ALIGNED(rp, 64);
 
@@ -121,14 +122,14 @@ inline void residual(
     // Last row.
     for (int j = j_begin; j < j_end; ++j)
     {
-        double* __restrict__       rnz1p = r(_, j, nz - 1);
+        T* __restrict__       rnz1p = r(_, j, nz - 1);
 
-        double const* __restrict__ anz2p = a(_, j, nz - 2);
+        T const* __restrict__ anz2p = a(_, j, nz - 2);
 
-        double const* __restrict__ bnz1p = b(_, j, nz - 1);
+        T const* __restrict__ bnz1p = b(_, j, nz - 1);
 
-        double const* __restrict__ unz2p = u(_, j, nz - 2);
-        double const* __restrict__ unz1p = u(_, j, nz - 1);
+        T const* __restrict__ unz2p = u(_, j, nz - 2);
+        T const* __restrict__ unz1p = u(_, j, nz - 1);
 
         TSB_ASSUME_ALIGNED(rnz1p, 64);
 
@@ -151,12 +152,13 @@ inline void residual(
     }
 }
 
+template <typename T>
 inline void residual(
-    array3d<double, layout_left>& r       // Residual
-  , array3d<double, layout_left> const& a // Lower band
-  , array3d<double, layout_left> const& b // Diagonal
-  , array3d<double, layout_left> const& c // Upper band
-  , array3d<double, layout_left> const& u // Solution
+    array3d<T, layout_left>& r       // Residual
+  , array3d<T, layout_left> const& a // Lower band
+  , array3d<T, layout_left> const& b // Diagonal
+  , array3d<T, layout_left> const& c // Upper band
+  , array3d<T, layout_left> const& u // Solution
     ) noexcept
 {
     residual(0, r.ny(), r, a, b, c, u);
@@ -164,14 +166,15 @@ inline void residual(
 
 ///////////////////////////////////////////////////////////////////////////////
 
+template <typename T>
 inline void residual(
-    array3d<double, layout_right>::size_type j_begin
-  , array3d<double, layout_right>::size_type j_end
-  , array3d<double, layout_right>& r       // Residual
-  , array3d<double, layout_right> const& a // Lower band
-  , array3d<double, layout_right> const& b // Diagonal
-  , array3d<double, layout_right> const& c // Upper band
-  , array3d<double, layout_right> const& u // Solution
+    typename array3d<T, layout_right>::size_type j_begin
+  , typename array3d<T, layout_right>::size_type j_end
+  , array3d<T, layout_right>& r       // Residual
+  , array3d<T, layout_right> const& a // Lower band
+  , array3d<T, layout_right> const& b // Diagonal
+  , array3d<T, layout_right> const& c // Upper band
+  , array3d<T, layout_right> const& u // Solution
     ) noexcept
 {
     auto const nx = r.nx();
@@ -198,14 +201,14 @@ inline void residual(
     // First row.
     for (int i = 0; i < nx; ++i)
     {
-        double* __restrict__       r0p = r(i, _, 0);
+        T* __restrict__       r0p = r(i, _, 0);
 
-        double const* __restrict__ b0p = b(i, _, 0);
+        T const* __restrict__ b0p = b(i, _, 0);
 
-        double const* __restrict__ c0p = c(i, _, 0);
+        T const* __restrict__ c0p = c(i, _, 0);
 
-        double const* __restrict__ u0p = u(i, _, 0);
-        double const* __restrict__ u1p = u(i, _, 1);
+        T const* __restrict__ u0p = u(i, _, 0);
+        T const* __restrict__ u1p = u(i, _, 1);
 
         auto const ac_stride  = a.stride_y();
         auto const bur_stride = b.stride_y();
@@ -237,15 +240,15 @@ inline void residual(
     for (int i = 0; i < nx; ++i)
         for (int j = j_begin; j < j_end; ++j)
         {
-            double* __restrict__       rp = r(i, j, _);
+            T* __restrict__       rp = r(i, j, _);
 
-            double const* __restrict__ ap = a(i, j, _);
+            T const* __restrict__ ap = a(i, j, _);
 
-            double const* __restrict__ bp = b(i, j, _);
+            T const* __restrict__ bp = b(i, j, _);
 
-            double const* __restrict__ cp = c(i, j, _);
+            T const* __restrict__ cp = c(i, j, _);
 
-            double const* __restrict__ up = u(i, j, _);
+            T const* __restrict__ up = u(i, j, _);
 
             TSB_ASSUME_ALIGNED(rp, 64);
 
@@ -274,14 +277,14 @@ inline void residual(
     // Last row.
     for (int i = 0; i < nx; ++i)
     {
-        double* __restrict__       rnz1p = r(i, _, nz - 1);
+        T* __restrict__       rnz1p = r(i, _, nz - 1);
 
-        double const* __restrict__ anz2p = a(i, _, nz - 2);
+        T const* __restrict__ anz2p = a(i, _, nz - 2);
 
-        double const* __restrict__ bnz1p = b(i, _, nz - 1);
+        T const* __restrict__ bnz1p = b(i, _, nz - 1);
 
-        double const* __restrict__ unz2p = u(i, _, nz - 2);
-        double const* __restrict__ unz1p = u(i, _, nz - 1);
+        T const* __restrict__ unz2p = u(i, _, nz - 2);
+        T const* __restrict__ unz1p = u(i, _, nz - 1);
 
         auto const ac_stride  = a.stride_y();
         auto const bur_stride = b.stride_y();
@@ -312,12 +315,13 @@ inline void residual(
     }
 }
 
+template <typename T>
 inline void residual(
-    array3d<double, layout_right>& r       // Residual
-  , array3d<double, layout_right> const& a // Lower band
-  , array3d<double, layout_right> const& b // Diagonal
-  , array3d<double, layout_right> const& c // Upper band
-  , array3d<double, layout_right> const& u // Solution
+    array3d<T, layout_right>& r       // Residual
+  , array3d<T, layout_right> const& a // Lower band
+  , array3d<T, layout_right> const& b // Diagonal
+  , array3d<T, layout_right> const& c // Upper band
+  , array3d<T, layout_right> const& u // Solution
     ) noexcept
 {
     residual(0, r.ny(), r, a, b, c, u);

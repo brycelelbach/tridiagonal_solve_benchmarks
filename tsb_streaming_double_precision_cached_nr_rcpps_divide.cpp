@@ -11,10 +11,6 @@
 
 int main()
 {
-    feenableexcept(FE_DIVBYZERO);
-    feenableexcept(FE_INVALID);
-    feenableexcept(FE_OVERFLOW);
-
     heat_equation_btcs_streaming_cached_divide<
         double
       , tsb::nr_rcp_divide<double, float>

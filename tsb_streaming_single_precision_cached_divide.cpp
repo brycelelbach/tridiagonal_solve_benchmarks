@@ -11,9 +11,9 @@
 
 int main()
 {
-    heat_equation_btcs_streaming_repeated_divide<
-        double
-      , tsb::divide<double>
+    heat_equation_btcs_streaming_cached_divide<
+        float
+      , tsb::divide<float>
     > s;
 
     s.run();
