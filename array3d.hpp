@@ -191,98 +191,120 @@ struct layout_right
     }
 };
 
-template <
-    typename T
-  , typename Layout
-  , std::uint64_t Alignment = 64
-    >
+template <typename T, typename Layout>
 struct array3d
 {
-    using size_type  = typename Layout::size_type;
-    using value_type = T;
+    using layout = Layout;
+
+    using size_type       = typename layout::size_type;
+    using value_type      = T;
+    using pointer         = T*;
+    using const_pointer   = T const*;
+    using reference       = T&;
+    using const_reference = T const&;
 
   private:
-    Layout layout_;
-    decltype(make_aligned_array<T, Alignment>(0)) data_;
+    layout layout_;
+    decltype(make_aligned_array<T>(2 * sizeof(void*), 0)) data_;
 
   public:
     constexpr array3d() noexcept : layout_(), data_() {}
 
     array3d(
-        size_type nx, size_type ny, size_type nz
+        size_type alignment
+      , size_type nx, size_type ny, size_type nz
         ) noexcept
       : layout_(), data_()
     {
-        resize(nx, ny, nz);
+        resize(alignment, nx, ny, nz);
     }
 
     array3d(
-        size_type nx, size_type ny, size_type nz
+        size_type alignment
+      , size_type nx, size_type ny, size_type nz
       , size_type px, size_type py, size_type pz
         ) noexcept
       : layout_(), data_()
     {
-        resize(nx, ny, nz, px, py, pz);
+        resize(alignment, nx, ny, nz, px, py, pz);
     }
 
     void resize(
-        size_type nx, size_type ny, size_type nz
+        size_type alignment
+      , size_type nx, size_type ny, size_type nz
         ) noexcept
     {
-        layout_ = Layout(nx, ny, nz);
-        data_   = make_aligned_array<T, Alignment>(layout_.span());
+        layout_ = layout(nx, ny, nz);
+        data_   = make_aligned_array<T>(alignment, layout_.span());
     }
 
     void resize(
-        size_type nx, size_type ny, size_type nz
+        size_type alignment
+      , size_type nx, size_type ny, size_type nz
       , size_type px, size_type py, size_type pz
         ) noexcept
     {
-        layout_ = Layout(nx, ny, nz, px, py, pz);
-        data_   = make_aligned_array<T, Alignment>(layout_.span());
+        layout_ = layout(nx, ny, nz, px, py, pz);
+        data_   = make_aligned_array<T>(alignment, layout_.span());
     }
 
-    T* data() const noexcept
+    const_pointer data() const noexcept
     {
         return data_.get();
     }
-    T* data() noexcept
+    pointer data() noexcept
     {
         return data_.get();
     }
 
-    T const& operator()(size_type i, size_type j, size_type k) const noexcept
+    const_reference operator()(
+        size_type i, size_type j, size_type k
+        ) const noexcept
     {
         return data_[layout_(i, j, k)];
     }
-    T& operator()(size_type i, size_type j, size_type k) noexcept
+    reference operator()(
+        size_type i, size_type j, size_type k
+        ) noexcept
     {
         return data_[layout_(i, j, k)];
     }
 
-    T const* operator()(placeholder p, size_type j, size_type k) const noexcept
+    const_pointer operator()(
+        placeholder p, size_type j, size_type k
+        ) const noexcept
     {
         return &data_[layout_(p, j, k)];
     }
-    T* operator()(placeholder p, size_type j, size_type k) noexcept
+    pointer operator()(
+        placeholder p, size_type j, size_type k
+        ) noexcept
     {
         return &data_[layout_(p, j, k)];
     }
 
-    T const* operator()(size_type i, placeholder p, size_type k) const noexcept
+    const_pointer operator()(
+        size_type i, placeholder p, size_type k
+        ) const noexcept
     {
         return &data_[layout_(i, p, k)];
     }
-    T* operator()(size_type i, placeholder p, size_type k) noexcept
+    pointer operator()(
+        size_type i, placeholder p, size_type k
+        ) noexcept
     {
         return &data_[layout_(i, p, k)];
     }
 
-    T const* operator()(size_type i, size_type j, placeholder p) const noexcept
+    const_pointer operator()(
+        size_type i, size_type j, placeholder p
+        ) const noexcept
     {
         return &data_[layout_(i, j, p)];
     }
-    T* operator()(size_type i, size_type j, placeholder p) noexcept
+    pointer operator()(
+        size_type i, size_type j, placeholder p
+        ) noexcept
     {
         return &data_[layout_(i, j, p)];
     }

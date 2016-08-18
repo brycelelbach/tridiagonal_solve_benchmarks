@@ -11,19 +11,19 @@
 #include <type_traits>
 #include <limits>
 
-template <
-    typename T
-  , typename = typename std::enable_if<std::is_floating_point<T>::value>::type
-    >
+template <typename T>
 constexpr bool fp_equals(
     T x, T y, T epsilon = std::numeric_limits<T>::epsilon()
     ) noexcept
 {
+    static_assert(
+        std::is_floating_point<T>::value
+      , "T must be a floating point type."
+    );
     return ( ((x + epsilon >= y) && (x - epsilon <= y))
            ? true
            : false);
 }
-
 
 #endif // CXX_A983ED3B_3C3B_42AF_8057_C5E91CA3242B
 

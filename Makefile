@@ -4,14 +4,10 @@
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 ###############################################################################
 
-# PARALLEL=0|1         (default: 1)
 # DEBUG=0|1            (default: 0)
 # STATIC=0|1           (default: 1 if not debug)
 # ASSERTS=0|1          (default: 1)
 # ARCH=AVX|AVX2|AVX512 (default: AVX)
-# ARRAYALIGN=<bytes>   (default: 1048576)
-# ARRAYPAD=<bytes>     (default: 9216)
-# NYPAD=<bytes>        (default: 1152)
 
 CXX=icpc
 
@@ -30,44 +26,13 @@ endif
 
 ifeq ($(ARCH),AVX512)
   BUILD_TYPE=AVX512
-  CXXFLAGS+=-xMIC-AVX512 -DARCH_AVX512
+  CXXFLAGS+=-xMIC-AVX512 -DTSB_ARCH_AVX512
 else ifeq ($(ARCH),AVX2)
   BUILD_TYPE=AVX2
-  CXXFLAGS+=-xCORE-AVX2 -DARCH_AVX2
+  CXXFLAGS+=-xCORE-AVX2 -DTSB_ARCH_AVX2
 else
   BUILD_TYPE=AVX
-  CXXFLAGS+=-xAVX -DARCH_AVX
-endif
-
-ifeq ($(ARRAYALIGN),)
-  BUILD_TYPE:=$(BUILD_TYPE).ARRAYALIGN-1048576
-  CXXFLAGS+=-DARRAYALIGN=1048576
-else
-  BUILD_TYPE:=$(BUILD_TYPE).ARRAYALIGN-$(ARRAYALIGN)
-  CXXFLAGS+=-DARRAYALIGN=$(ARRAYALIGN)
-endif
-
-ifeq ($(ARRAYPAD),)
-  BUILD_TYPE:=$(BUILD_TYPE).ARRAYPAD-9216
-  CXXFLAGS+=-DARRAYPAD=9216
-else
-  BUILD_TYPE:=$(BUILD_TYPE).ARRAYPAD-$(ARRAYPAD)
-  CXXFLAGS+=-DARRAYPAD=$(ARRAYPAD)
-endif
-
-ifeq ($(NYPAD),)
-  BUILD_TYPE:=$(BUILD_TYPE).NYPAD-1152
-  CXXFLAGS+=-DNYPAD=1152
-else
-  BUILD_TYPE:=$(BUILD_TYPE).NYPAD-$(NYPAD)
-  CXXFLAGS+=-DNYPAD=$(NYPAD)
-endif
-
-ifneq ($(PARALLEL),0) # PARALLEL == 1
-  BUILD_TYPE:=$(BUILD_TYPE).PARALLEL
-  CXXFLAGS+=-qopenmp
-else                  # PARALLEL == 0
-  BUILD_TYPE:=$(BUILD_TYPE).SERIAL
+  CXXFLAGS+=-xAVX -DTSB_ARCH_AVX
 endif
 
 ifeq ($(DEBUG),1)     # DEBUG == 1
@@ -95,7 +60,10 @@ else                  # ASSERTS == 0
   CXXFLAGS+=-DNDEBUG
 endif
 
-CXXFLAGS+=-std=c++11 -DBUILD_TYPE=\"$(BUILD_TYPE)\"
+# Disable icpc warning #2261: __assume expression with side effects discarded
+CXXFLAGS+=-wd2261
+
+CXXFLAGS+=-std=c++11 -qopenmp -DTSB_BUILD_TYPE=\"$(BUILD_TYPE)\"
 
 # We disable IPO because ICPC dumps ~500k of raw IPO data into the assembly
 # files otherwise.

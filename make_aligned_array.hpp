@@ -17,19 +17,36 @@
 #include <cstring>
 #include <cassert>
 
-template <
-    typename T
-  , typename = typename std::enable_if<std::is_unsigned<T>::value>::type
-    >
-inline constexpr bool is_power_of_2(T t)
+#include "assume.hpp"
+
+template <typename T>
+inline constexpr typename std::enable_if<
+    std::is_unsigned<T>::value
+  , bool
+>::type is_power_of_2(T t)
 {
     return bool((t != 0) && !(t & (t - 1)));
 }
 
-template <std::size_t Alignment>
-void* align_ptr(void* ptr, std::ptrdiff_t size, std::ptrdiff_t space) noexcept
+template <typename T>
+inline constexpr typename std::enable_if<
+    std::is_signed<T>::value
+  , bool
+>::type is_power_of_2(T t)
 {
-    if (0 == Alignment)
+    return is_power_of_2(std::uintptr_t(t)); 
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+void* align_ptr(
+    void* ptr
+  , std::ptrdiff_t alignment
+  , std::ptrdiff_t size
+  , std::ptrdiff_t space
+    ) noexcept
+{
+    if (0 == alignment)
     {
         if (size > space)
             return nullptr;
@@ -40,7 +57,7 @@ void* align_ptr(void* ptr, std::ptrdiff_t size, std::ptrdiff_t space) noexcept
     auto const start = reinterpret_cast<std::uintptr_t>(ptr);
 
     auto aligned = start; 
-    while (0 != (aligned % Alignment))
+    while (0 != (aligned % alignment))
         ++aligned;
 
     auto const diff = aligned - start;
@@ -54,122 +71,140 @@ void* align_ptr(void* ptr, std::ptrdiff_t size, std::ptrdiff_t space) noexcept
     }
 }
 
+///////////////////////////////////////////////////////////////////////////////
+
+template <typename T>
+struct aligned_array_ptr;
+
+template <typename T>
+inline aligned_array_ptr<T> make_aligned_array_posix_memalign(
+    std::ptrdiff_t alignment
+  , std::ptrdiff_t size
+    ) noexcept
+{
+    assert(true == is_power_of_2(alignment));
+
+    void* p = 0;
+    int const r = ::posix_memalign(&p, alignment, size * sizeof(T));
+    assert(0 == r);
+
+    TSB_ASSUME_ALIGNED(p, 2 * sizeof(void*));
+
+    ::memset(p, 0, size * sizeof(T));
+
+    return aligned_array_ptr<T>(
+        alignment, size, reinterpret_cast<T*>(p), reinterpret_cast<T*>(p)
+    );
+}
+
+template <typename T>
+inline aligned_array_ptr<T> make_aligned_array_overallocate(
+    std::ptrdiff_t alignment
+  , std::ptrdiff_t size
+    ) noexcept
+{
+    auto const space = (size * sizeof(T)) + alignment;
+
+    void* p = ::malloc(space);
+    assert(p);
+
+    void* ap = align_ptr(p, alignment, size * sizeof(T), space);
+    assert(ap);
+
+    TSB_ASSUME_ALIGNED(ap, 2 * sizeof(void*));
+
+    ::memset(ap, 0, size * sizeof(T));
+
+    return aligned_array_ptr<T>(
+        alignment, size, reinterpret_cast<T*>(p), reinterpret_cast<T*>(ap)
+    );
+}
+
+template <typename T>
+inline aligned_array_ptr<T> make_aligned_array(
+    std::ptrdiff_t alignment
+  , std::ptrdiff_t size
+    ) noexcept
+{
+    static_assert(true == std::is_pod<T>::value, "T must be POD");
+
+    assert(0 == (alignment % (2 * sizeof(void*))));
+
+    if (is_power_of_2(alignment))
+        return make_aligned_array_posix_memalign<T>(alignment, size);
+    else
+        return make_aligned_array_overallocate<T>(alignment, size);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
 template <typename T>
 struct free_deleter
 {
     void operator()(T* p) const noexcept
     {
-        std::free(p);
+        ::free(p);
     }
 };
 
-template <typename T, std::uint64_t Alignment = 64>
-struct aligned_array_ptr;
-
-template <
-    typename T
-  , std::uint64_t Alignment = 64
-    >
-inline typename std::enable_if<
-    is_power_of_2(Alignment)
-  , aligned_array_ptr<T, Alignment>
->::type make_aligned_array(std::ptrdiff_t size) noexcept
-{
-    static_assert( true == std::is_pod<T>::value
-                 , "T must be POD");
-    static_assert( 0 == (Alignment % sizeof(void*))
-                 , "Alignment must be a multiple of sizeof(void*)");
-    static_assert( true == is_power_of_2(Alignment)
-                 , "Alignment must be a power of 2");
-
-    void* p = 0;
-    int const r = ::posix_memalign(&p, Alignment, size * sizeof(T));
-    assert(0 == r);
-
-    #if defined(__INTEL_COMPILER) && __INTEL_COMPILER >= 1700
-        // Prior versions of ICPC won't accept a non-type template argument
-        // as a parameter to __assume_aligned().
-        __assume_aligned(p, Alignment);
-    #endif
-
-    std::memset(p, 0, size * sizeof(T));
-
-    return aligned_array_ptr<T, Alignment>(
-        reinterpret_cast<T*>(p), reinterpret_cast<T*>(p)
-    );
-}
-
-template <
-    typename T
-  , std::uint64_t Alignment = 64
-    >
-inline typename std::enable_if<
-    !is_power_of_2(Alignment)
-  , aligned_array_ptr<T, Alignment>
->::type make_aligned_array(std::ptrdiff_t size) noexcept
-{
-    static_assert( true == std::is_pod<T>::value
-                 , "T must be POD");
-    static_assert( 0 == (Alignment % sizeof(void*))
-                 , "Alignment must be a multiple of sizeof(void*)");
-
-    auto const space = (size * sizeof(T)) + Alignment;
-
-    void* p = ::malloc(space);
-    assert(p);
-
-    void* ap = align_ptr<Alignment>(p, size * sizeof(T), space);
-    assert(ap);
-
-    #if defined(__INTEL_COMPILER) && __INTEL_COMPILER >= 1700
-        // Prior versions of ICPC won't accept a non-type template argument
-        // as a parameter to __assume_aligned().
-        __assume_aligned(ap, Alignment);
-    #endif
-
-    std::memset(ap, 0, size * sizeof(T));
-
-    return aligned_array_ptr<T, Alignment>(
-        reinterpret_cast<T*>(p), reinterpret_cast<T*>(ap)
-    );
-}
-
-template <typename T, std::uint64_t Alignment>
+template <typename T>
 struct aligned_array_ptr
 {
-    static_assert( true == std::is_pod<T>::value
-                 , "T must be POD");
+    static_assert(true == std::is_pod<T>::value, "T must be POD");
 
-    using size_type = std::ptrdiff_t;
+    using size_type  = std::ptrdiff_t;
     using value_type = T;
-    using pointer = typename std::add_pointer<T>::type;
-    using reference = typename std::add_lvalue_reference<T>::type;
+    using pointer    = T*;
+    using reference  = T&;
 
   private:
+    size_type alignment_;
+    size_type size_;
     std::unique_ptr<T[], free_deleter<T> > true_ptr_;
     T* aligned_ptr_;
 
-    explicit aligned_array_ptr(T* true_ptr, T* aligned_array_ptr)
-      : true_ptr_(true_ptr, free_deleter<T>()), aligned_ptr_(aligned_array_ptr)
+    explicit aligned_array_ptr(
+        size_type alignment
+      , size_type size
+      , T* true_ptr
+      , T* aligned_array_ptr
+        )
+      : alignment_(alignment)
+      , size_(size)
+      , true_ptr_(true_ptr, free_deleter<T>())
+      , aligned_ptr_(aligned_array_ptr)
     {}
 
-    friend aligned_array_ptr make_aligned_array<T, Alignment>(
-        std::ptrdiff_t size
+    friend aligned_array_ptr<T> make_aligned_array_posix_memalign<T>(
+        size_type alignment
+      , size_type size
+        ) noexcept;
+
+    friend aligned_array_ptr<T> make_aligned_array_overallocate<T>(
+        size_type alignment
+      , size_type size
         ) noexcept;
 
   public:
-    aligned_array_ptr()
-      : true_ptr_(nullptr, free_deleter<T>()), aligned_ptr_(nullptr)
+    constexpr aligned_array_ptr() noexcept
+      : alignment_(0)
+      , size_(0)
+      , true_ptr_(nullptr, free_deleter<T>())
+      , aligned_ptr_(nullptr)
     {}
 
-    aligned_array_ptr(aligned_array_ptr&& other)
-      : true_ptr_(std::move(other.true_ptr_))
+    aligned_array_ptr(aligned_array_ptr&& other) noexcept
+      : alignment_(std::move(other.alignment_))
+      , size_(std::move(other.size_))
+      , true_ptr_(std::move(other.true_ptr_))
       , aligned_ptr_(std::move(other.aligned_ptr_))
     {}
 
     aligned_array_ptr& operator=(aligned_array_ptr&& other) noexcept
     {
-        std::swap(true_ptr_, other.true_ptr_);
+        std::swap(alignment_,   other.alignment_);
+        std::swap(size_,        other.size_);
+        std::swap(true_ptr_,    other.true_ptr_);
         std::swap(aligned_ptr_, other.aligned_ptr_);
     }
 
@@ -191,6 +226,16 @@ struct aligned_array_ptr
     pointer get() const noexcept
     {
         return aligned_ptr_;
+    }
+
+    size_type constexpr alignment() const noexcept
+    {
+        return alignment_;
+    }
+
+    size_type constexpr size() const noexcept
+    {
+        return size_;
     }
 };
 

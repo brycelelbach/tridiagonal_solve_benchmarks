@@ -10,29 +10,31 @@
 
 #include <string>
 #include <iostream>
+#include <limits>
 
 #include <cstdint>
 #include <cstdlib>
 #include <climits>
 
 template <typename T>
-T get_env_variable(std::string const& var, T default_val); 
+T get_env_variable(std::string const& var, T default_); 
 
 template <>
-bool get_env_variable(std::string const& var, bool default_val) 
+bool get_env_variable(std::string const& var, bool default_) 
 {
     char const* const env_str_p(std::getenv(var.c_str()));
 
     if (nullptr == env_str_p)
-        return default_val;
+        return default_;
 
     std::string const env_str(env_str_p);
 
     char* env_str_p_end(nullptr);
 
-    std::uint64_t const r = std::strtoul(env_str.c_str(), &env_str_p_end, 10);
+    long const r = std::strtol(env_str.c_str(), &env_str_p_end, 10);
 
-    if ((&env_str.back() != env_str_p_end - 1) || ULONG_MAX == r)
+    if (  (&env_str.back() != env_str_p_end - 1)
+       || std::numeric_limits<long>::max() == r)
     {
         std::cout << "ERROR: invalid value '" << env_str << "' "
                      "for boolean environment variable '" << var << "'"
@@ -44,20 +46,21 @@ bool get_env_variable(std::string const& var, bool default_val)
 }
 
 template <>
-std::uint64_t get_env_variable(std::string const& var, std::uint64_t default_val) 
+long get_env_variable(std::string const& var, long default_) 
 {
     char const* const env_str_p(std::getenv(var.c_str()));
 
     if (nullptr == env_str_p)
-        return default_val;
+        return default_;
 
     std::string const env_str(env_str_p);
 
     char* env_str_p_end(nullptr);
 
-    std::uint64_t const r = std::strtoul(env_str.c_str(), &env_str_p_end, 10);
+    long const r = std::strtol(env_str.c_str(), &env_str_p_end, 10);
 
-    if ((&env_str.back() != env_str_p_end - 1) || ULONG_MAX == r)
+    if (  (&env_str.back() != env_str_p_end - 1)
+       || std::numeric_limits<long>::max() == r)
     {
         std::cout << "ERROR: invalid value '" << env_str << "' "
                      "for integer environment variable '" << var << "'"
@@ -69,12 +72,12 @@ std::uint64_t get_env_variable(std::string const& var, std::uint64_t default_val
 }
 
 template <>
-double get_env_variable(std::string const& var, double default_val) 
+double get_env_variable(std::string const& var, double default_) 
 {
     char const* const env_str_p(std::getenv(var.c_str()));
 
     if (nullptr == env_str_p)
-        return default_val;
+        return default_;
 
     std::string const env_str(env_str_p);
 
@@ -94,12 +97,12 @@ double get_env_variable(std::string const& var, double default_val)
 }
 
 template <>
-float get_env_variable(std::string const& var, float default_val) 
+float get_env_variable(std::string const& var, float default_) 
 {
     char const* const env_str_p(std::getenv(var.c_str()));
 
     if (nullptr == env_str_p)
-        return default_val;
+        return default_;
 
     std::string const env_str(env_str_p);
 

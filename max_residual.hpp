@@ -1,0 +1,154 @@
+///////////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2016 Bryce Adelstein Lelbach aka wash <brycelelbach@gmail.com>
+//
+// Distributed under the Boost Software License, Version 1.0. (See accompanying
+// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+///////////////////////////////////////////////////////////////////////////////
+
+#if !defined(CXX_F50DCB2B_69E6_4867_8160_5D41D27CCA7D)
+#define CXX_F50DCB2B_69E6_4867_8160_5D41D27CCA7D
+
+#include <limits>
+
+#include "assume.hpp"
+#include "array3d.hpp"
+#include "residual.hpp"
+
+#warning Parallelize max_residual
+
+///////////////////////////////////////////////////////////////////////////////
+
+template <typename T>
+inline T max_residual(
+    typename array3d<T, layout_left>::size_type j_begin
+  , typename array3d<T, layout_left>::size_type j_end
+  , array3d<T, layout_left>& r       // Residual
+  , array3d<T, layout_left> const& a // Lower band
+  , array3d<T, layout_left> const& b // Diagonal
+  , array3d<T, layout_left> const& c // Upper band
+  , array3d<T, layout_left> const& u // Solution
+    ) noexcept
+{
+    auto const nx = u.nx();
+    auto const nz = u.nz();
+
+    residual(j_begin, j_end, r, a, b, c, u);
+
+    T mr = 0.0; 
+
+    TSB_ASSUME(0 == (nx % 16)); 
+
+    for (auto j = j_begin; j < j_end; ++j)
+        for (auto i = 0; i < nx; ++i)
+        {
+            T min = std::numeric_limits<T>::max();
+            T max = std::numeric_limits<T>::min();
+
+            T const* __restrict__ rp = r(i, j, _);
+
+            auto const stride = r.stride_z();
+
+            TSB_ASSUME_ALIGNED(rp, 8);
+
+            // NOTE: Strided access.
+            #pragma simd
+            for (auto k = 0; k < nz; ++k)
+            {
+                auto const ks = k * stride;
+
+                min = std::min(min, rp[ks]);
+                max = std::max(max, rp[ks]);
+            }
+
+            T const mr_here = std::max(std::fabs(min), std::fabs(max));
+
+            if ((0 == i) && (0 == j))
+                // First iteration, so we have nothing to compare against.
+                mr = mr_here;
+            else
+                // All the columns are the same, so the max residual for
+                // each column should be the same.
+                assert(fp_equals(mr, mr_here));
+        }
+
+    return mr;
+}
+
+template <typename T>
+inline T max_residual(
+    array3d<T, layout_left>& r       // Residual
+  , array3d<T, layout_left> const& a // Lower band
+  , array3d<T, layout_left> const& b // Diagonal
+  , array3d<T, layout_left> const& c // Upper band
+  , array3d<T, layout_left> const& u // Solution
+    ) noexcept
+{
+    return max_residual(0, r.ny(), r, a, b, c, u);
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+template <typename T>
+inline T max_residual(
+    typename array3d<T, layout_right>::size_type j_begin
+  , typename array3d<T, layout_right>::size_type j_end
+  , array3d<T, layout_right>& r       // Residual
+  , array3d<T, layout_right> const& a // Lower band
+  , array3d<T, layout_right> const& b // Diagonal
+  , array3d<T, layout_right> const& c // Upper band
+  , array3d<T, layout_right> const& u // Solution
+    ) noexcept
+{
+    auto const nx = u.nx();
+    auto const nz = u.nz();
+
+    residual(r, a, b, c, u);
+
+    T mr = 0.0; 
+
+    TSB_ASSUME(0 == (nz % 16)); 
+
+    for (auto i = 0; i < nx; ++i)
+        for (auto j = j_begin; j < j_end; ++j)
+        {
+            T min = std::numeric_limits<T>::max();
+            T max = std::numeric_limits<T>::min();
+
+            T const* rp = r(i, j, _);
+
+            TSB_ASSUME_ALIGNED(rp, 64);
+
+            #pragma simd
+            for (auto k = 0; k < nz; ++k)
+            {
+                min = std::min(min, rp[k]);
+                max = std::max(max, rp[k]);
+            }
+
+            T const mr_here = std::max(std::fabs(min), std::fabs(max));
+
+            if ((0 == i) && (0 == j))
+                // First iteration, so we have nothing to compare against.
+                mr = mr_here;
+            else
+                // All the columns are the same, so the max residual for
+                // each column should be the same.
+                assert(fp_equals(mr, mr_here));
+        }
+
+    return mr;
+}
+
+template <typename T>
+inline T max_residual(
+    array3d<T, layout_right>& r       // Residual
+  , array3d<T, layout_right> const& a // Lower band
+  , array3d<T, layout_right> const& b // Diagonal
+  , array3d<T, layout_right> const& c // Upper band
+  , array3d<T, layout_right> const& u // Solution
+    ) noexcept
+{
+    return max_residual(0, r.ny(), r, a, b, c, u);
+}
+
+#endif // CXX_F50DCB2B_69E6_4867_8160_5D41D27CCA7D
