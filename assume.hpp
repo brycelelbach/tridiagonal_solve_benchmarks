@@ -11,8 +11,6 @@
 #include <cstdint>
 #include <cassert>
 
-#warning No raw asserts
-
 #if defined(NDEBUG)
     #define TSB_ASSUME(expr)                                                    \
         {                                                                       \
