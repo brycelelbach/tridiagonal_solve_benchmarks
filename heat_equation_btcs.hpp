@@ -12,7 +12,6 @@
 #include <algorithm>
 
 #include <cmath>
-#include <cassert>
 #include <cstdio>
 #include <cstdint>
 
@@ -586,7 +585,7 @@ struct solver_traits<
 
     using timer = Timer; 
 
-    static align_policy_enum constexpr align_policy = use_array_base_align;
+    static align_policy_enum constexpr align_policy = use_all_align_policies;
 };
 
 } // tsb
