@@ -11,8 +11,6 @@
 #include "assume.hpp"
 #include "array3d.hpp"
 
-#warning Replace with memcopy
-
 // copy(dest, src): dest = src 
 
 ///////////////////////////////////////////////////////////////////////////////

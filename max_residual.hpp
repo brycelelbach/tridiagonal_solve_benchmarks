@@ -14,8 +14,6 @@
 #include "array3d.hpp"
 #include "residual.hpp"
 
-#warning Parallelize max_residual
-
 ///////////////////////////////////////////////////////////////////////////////
 
 template <typename T>
@@ -36,7 +34,7 @@ inline T max_residual(
 
     T mr = 0.0; 
 
-    TSB_ASSUME(0 == (nx % 16)); 
+    TSB_ASSUME(0 == (nx % 16)); // Assume unit stride is divisible by 16.
 
     for (auto j = j_begin; j < j_end; ++j)
         for (auto i = 0; i < nx; ++i)
@@ -68,7 +66,7 @@ inline T max_residual(
             else
                 // All the columns are the same, so the max residual for
                 // each column should be the same.
-                assert(fp_equals(mr, mr_here));
+                TSB_ASSUME(fp_equals(mr, mr_here));
         }
 
     return mr;
@@ -106,7 +104,7 @@ inline T max_residual(
 
     T mr = 0.0; 
 
-    TSB_ASSUME(0 == (nz % 16)); 
+    TSB_ASSUME(0 == (nz % 16)); // Assume unit stride is divisible by 16.
 
     for (auto i = 0; i < nx; ++i)
         for (auto j = j_begin; j < j_end; ++j)
@@ -133,7 +131,7 @@ inline T max_residual(
             else
                 // All the columns are the same, so the max residual for
                 // each column should be the same.
-                assert(fp_equals(mr, mr_here));
+                TSB_ASSUME(fp_equals(mr, mr_here));
         }
 
     return mr;

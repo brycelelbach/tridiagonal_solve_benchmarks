@@ -11,8 +11,6 @@
 #include "assume.hpp"
 #include "array3d.hpp"
 
-#warning Tile + Parallelize l2_norm
-
 ///////////////////////////////////////////////////////////////////////////////
 
 template <typename T, typename Exact>
@@ -24,7 +22,7 @@ inline T l2_norm(array3d<T, layout_left> const& u, Exact&& exact) noexcept
 
     T l2 = 0.0;
 
-    TSB_ASSUME(0 == (nx % 16)); 
+    TSB_ASSUME(0 == (nx % 16)); // Assume unit stride is divisible by 16.
 
     for (auto j = 0; j < ny; ++j)
         for (auto i = 0; i < nx; ++i)
@@ -55,7 +53,7 @@ inline T l2_norm(array3d<T, layout_left> const& u, Exact&& exact) noexcept
             else
                 // All the columns are the same, so the L2 norm for each
                 // column should be the same.
-                assert(fp_equals(l2, l2_here));
+                TSB_ASSUME(fp_equals(l2, l2_here));
         }
 
     return l2;
@@ -72,7 +70,7 @@ inline T l2_norm(array3d<T, layout_right> const& u, Exact&& exact) noexcept
 
     T l2 = 0.0;
 
-    TSB_ASSUME(0 == (nz % 16)); 
+    TSB_ASSUME(0 == (nz % 16)); // Assume unit stride is divisible by 16.
 
     for (auto i = 0; i < nx; ++i)
         for (auto j = 0; j < ny; ++j)
@@ -98,7 +96,7 @@ inline T l2_norm(array3d<T, layout_right> const& u, Exact&& exact) noexcept
             else
                 // All the columns are the same, so the L2 norm for each
                 // column should be the same.
-                assert(fp_equals(l2, l2_here));
+                TSB_ASSUME(fp_equals(l2, l2_here));
         }
 
     return l2;

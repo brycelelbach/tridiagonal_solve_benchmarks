@@ -36,7 +36,5 @@
         /**/
 #endif
 
-#warning Add missing unit stride comments
-
 #endif // CXX_C6134B57_4F3E_4A1D_900E_B93CF6FB93F5
 

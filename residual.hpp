@@ -31,24 +31,24 @@ inline void residual(
 
     TSB_ASSUME(0 == (nx % 16)); // Assume unit stride is divisible by 16.
 
-    assert(r.nx() == a.nx());
-    assert(r.ny() == a.ny());
-    assert(r.nz() == a.nz());
+    TSB_ASSUME(r.nx() == a.nx());
+    TSB_ASSUME(r.ny() == a.ny());
+    TSB_ASSUME(r.nz() == a.nz());
 
-    assert(r.nx() == b.nx());
-    assert(r.ny() == b.ny());
-    assert(r.nz() == b.nz());
+    TSB_ASSUME(r.nx() == b.nx());
+    TSB_ASSUME(r.ny() == b.ny());
+    TSB_ASSUME(r.nz() == b.nz());
 
-    assert(r.nx() == c.nx());
-    assert(r.ny() == c.ny());
-    assert(r.nz() == c.nz());
+    TSB_ASSUME(r.nx() == c.nx());
+    TSB_ASSUME(r.ny() == c.ny());
+    TSB_ASSUME(r.nz() == c.nz());
 
-    assert(r.nx() == u.nx());
-    assert(r.ny() == u.ny());
-    assert(r.nz() == u.nz());
+    TSB_ASSUME(r.nx() == u.nx());
+    TSB_ASSUME(r.ny() == u.ny());
+    TSB_ASSUME(r.nz() == u.nz());
 
     // First row.
-    for (int j = j_begin; j < j_end; ++j)
+    for (auto j = j_begin; j < j_end; ++j)
     {
         T* __restrict__       r0p = r(_, j, 0);
 
@@ -69,7 +69,7 @@ inline void residual(
         TSB_ASSUME_ALIGNED(u1p, 64);
 
         #pragma simd
-        for (int i = 0; i < nx; ++i)
+        for (auto i = 0; i < nx; ++i)
         {
             // NOTE: The comment is k-indexed. The code is i-indexed.
             // r[0] = (b[0] * u[0] + c[0] * u[1]) - r[0];
@@ -78,8 +78,8 @@ inline void residual(
     }
 
     // Interior rows.
-    for (int k = 1; k < nz - 1; ++k)
-        for (int j = j_begin; j < j_end; ++j)
+    for (auto k = 1; k < nz - 1; ++k)
+        for (auto j = j_begin; j < j_end; ++j)
         {
             T* __restrict__       rp     = r(_, j, k);
 
@@ -106,7 +106,7 @@ inline void residual(
             TSB_ASSUME_ALIGNED(uadd1p, 64);
 
             #pragma simd
-            for (int i = 0; i < nx; ++i)
+            for (auto i = 0; i < nx; ++i)
             {
                 // r[k] = ( a[k - 1] * u[k - 1]
                 //        + b[k] * u[k]
@@ -120,7 +120,7 @@ inline void residual(
         }
 
     // Last row.
-    for (int j = j_begin; j < j_end; ++j)
+    for (auto j = j_begin; j < j_end; ++j)
     {
         T* __restrict__       rnz1p = r(_, j, nz - 1);
 
@@ -141,7 +141,7 @@ inline void residual(
         TSB_ASSUME_ALIGNED(unz1p, 64);
 
         #pragma simd
-        for (int i = 0; i < nx; ++i)
+        for (auto i = 0; i < nx; ++i)
         {
             // NOTE: The comment is k-indexed. The code is i-indexed.
             // r[nz - 1] = (a[nz - 2] * u[nz - 2] + b[nz - 1] * u[nz - 1])
@@ -182,24 +182,24 @@ inline void residual(
 
     TSB_ASSUME(0 == (nz % 16)); // Assume unit stride is divisible by 16.
 
-    assert(r.nx() == a.nx());
-    assert(r.ny() == a.ny());
-    assert(r.nz() == a.nz());
+    TSB_ASSUME(r.nx() == a.nx());
+    TSB_ASSUME(r.ny() == a.ny());
+    TSB_ASSUME(r.nz() == a.nz());
 
-    assert(r.nx() == b.nx());
-    assert(r.ny() == b.ny());
-    assert(r.nz() == b.nz());
+    TSB_ASSUME(r.nx() == b.nx());
+    TSB_ASSUME(r.ny() == b.ny());
+    TSB_ASSUME(r.nz() == b.nz());
 
-    assert(r.nx() == c.nx());
-    assert(r.ny() == c.ny());
-    assert(r.nz() == c.nz());
+    TSB_ASSUME(r.nx() == c.nx());
+    TSB_ASSUME(r.ny() == c.ny());
+    TSB_ASSUME(r.nz() == c.nz());
 
-    assert(r.nx() == u.nx());
-    assert(r.ny() == u.ny());
-    assert(r.nz() == u.nz());
+    TSB_ASSUME(r.nx() == u.nx());
+    TSB_ASSUME(r.ny() == u.ny());
+    TSB_ASSUME(r.nz() == u.nz());
 
     // First row.
-    for (int i = 0; i < nx; ++i)
+    for (auto i = 0; i < nx; ++i)
     {
         T* __restrict__       r0p = r(i, _, 0);
 
@@ -224,7 +224,7 @@ inline void residual(
 
         // NOTE: Strided access.
         #pragma simd
-        for (int j = j_begin; j < j_end; ++j)
+        for (auto j = j_begin; j < j_end; ++j)
         {
             auto const jacs  = j * ac_stride;
             auto const jburs = j * bur_stride;
@@ -237,8 +237,8 @@ inline void residual(
     }
 
     // Interior rows.
-    for (int i = 0; i < nx; ++i)
-        for (int j = j_begin; j < j_end; ++j)
+    for (auto i = 0; i < nx; ++i)
+        for (auto j = j_begin; j < j_end; ++j)
         {
             T* __restrict__       rp = r(i, j, _);
 
@@ -261,7 +261,7 @@ inline void residual(
             TSB_ASSUME_ALIGNED(up, 64);
 
             #pragma simd
-            for (int k = 1; k < nz - 1; ++k)
+            for (auto k = 1; k < nz - 1; ++k)
             {
                 // r[k] = ( a[k - 1] * u[k - 1]
                 //        + b[k] * u[k]
@@ -275,7 +275,7 @@ inline void residual(
         }
 
     // Last row.
-    for (int i = 0; i < nx; ++i)
+    for (auto i = 0; i < nx; ++i)
     {
         T* __restrict__       rnz1p = r(i, _, nz - 1);
 
@@ -300,7 +300,7 @@ inline void residual(
 
         // NOTE: Strided access.
         #pragma simd
-        for (int j = j_begin; j < j_end; ++j)
+        for (auto j = j_begin; j < j_end; ++j)
         {
             auto const jacs  = j * ac_stride;
             auto const jburs = j * bur_stride;

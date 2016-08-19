@@ -123,12 +123,12 @@ void build_matrix_tile(
     T const ac_term = -A_coef;
     T const b_term  = 1.0 + 2.0 * A_coef;
 
-    TSB_ASSUME(0 == (nz % 16)); 
+    TSB_ASSUME(0 == (nz % 16)); // Assume unit stride is divisible by 16.
 
     for (auto i = 0; i < nx; ++i)
         for (auto j = j_begin; j < j_end; ++j)
         {
-            T* bp = b(i, j, _);
+            T* __restrict__ bp = b(i, j, _);
 
             TSB_ASSUME_ALIGNED(bp, 64);
 
@@ -136,8 +136,8 @@ void build_matrix_tile(
             for (auto k = 0; k < nz; ++k)
                 bp[k] = b_term;
 
-            T* ap = a(i, j, _);
-            T* cp = c(i, j, _);
+            T* __restrict__ ap = a(i, j, _);
+            T* __restrict__ cp = c(i, j, _);
 
             TSB_ASSUME_ALIGNED(ap, 64);
             TSB_ASSUME_ALIGNED(cp, 64);
@@ -153,14 +153,14 @@ void build_matrix_tile(
     // Boundary conditions.
     for (auto i = 0; i < nx; ++i)
     {
-        T* bbeginp = b(i, _, 0);
-        T* cbeginp = c(i, _, 0);
+        T* __restrict__ bbeginp = b(i, _, 0);
+        T* __restrict__ cbeginp = c(i, _, 0);
 
-        T* aendp   = a(i, _, nz - 2);
-        T* bendp   = b(i, _, nz - 1);
+        T* __restrict__ aendp   = a(i, _, nz - 2);
+        T* __restrict__ bendp   = b(i, _, nz - 1);
 
-        auto ac_stride = a.stride_y();
-        auto b_stride  = b.stride_y();
+        auto const ac_stride = a.stride_y();
+        auto const b_stride  = b.stride_y();
 
         TSB_ASSUME_ALIGNED(bbeginp, 64);
         TSB_ASSUME_ALIGNED(cbeginp, 64);
@@ -172,8 +172,8 @@ void build_matrix_tile(
         #pragma simd
         for (auto j = j_begin; j < j_end; ++j)
         {
-            auto jacs = j * ac_stride;
-            auto jbs  = j * b_stride;
+            auto const jacs = j * ac_stride;
+            auto const jbs  = j * b_stride;
 
             bbeginp[jbs] = 1.0; cbeginp[jacs] = 0.0;
             aendp[jacs]  = 0.0; bendp[jbs]    = 1.0;
