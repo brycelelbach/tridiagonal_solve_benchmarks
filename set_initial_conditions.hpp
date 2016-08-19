@@ -86,7 +86,7 @@ void set_initial_conditions_tile(
 
             #pragma simd
             for (auto k = 0; k < nz; ++k)
-                up[i] = ics(k);
+                up[k] = ics(k);
         }
 }
 
