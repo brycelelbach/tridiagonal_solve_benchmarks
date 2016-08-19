@@ -5,17 +5,18 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 ///////////////////////////////////////////////////////////////////////////////
 
-#if !defined(CXX_6594A0DA_8E9E_4B31_A32F_38EFDF13289E)
-#define CXX_6594A0DA_8E9E_4B31_A32F_38EFDF13289E
+#if !defined(TSB_6594A0DA_8E9E_4B31_A32F_38EFDF13289E)
+#define TSB_6594A0DA_8E9E_4B31_A32F_38EFDF13289E
 
-#include <cstdint>
 #include <cstddef>
 
 #include "make_aligned_array.hpp"
 
+namespace tsb {
+
 struct placeholder {};
 
-constexpr placeholder _ {};
+constexpr placeholder _ {}; // This does not make me a bad person.
 
 struct layout_left
 {
@@ -341,5 +342,7 @@ struct array3d
     }
 };
 
-#endif // CXX_6594A0DA_8E9E_4B31_A32F_38EFDF13289E
+} // tsb
+
+#endif // TSB_6594A0DA_8E9E_4B31_A32F_38EFDF13289E
 

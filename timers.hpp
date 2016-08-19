@@ -12,7 +12,7 @@
 
 #include <cstdint>
 
-// FIXME: Some of these can be noexcept/constexpr
+namespace tsb {
 
 struct high_resolution_timer
 {
@@ -37,9 +37,9 @@ struct high_resolution_timer
         return take_time_stamp() - start_time_;
     }
 
-    char const* units() const noexcept
+    static constexpr char const* units() noexcept
     {
-        return "[s]";
+        return "s";
     }
 
   protected:
@@ -71,9 +71,9 @@ struct tsc_timer
         return take_time_stamp() - start_time_;
     }
 
-    char const* units() const noexcept
+    static constexpr char const* units() noexcept
     {
-        return "[tsc]";
+        return "tsc";
     }
 
   protected:
@@ -91,6 +91,8 @@ struct tsc_timer
   private:
     value_type start_time_;
 };
+
+} // tsb
 
 #endif // TSB_E4F4B515_8E1B_4301_8B18_7A802EDAC5D2
 

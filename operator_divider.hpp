@@ -5,19 +5,23 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 ///////////////////////////////////////////////////////////////////////////////
 
-#if !defined(CXX_F742275E_B603_4E7A_A115_B2250A8AC4D3)
-#define CXX_F742275E_B603_4E7A_A115_B2250A8AC4D3
+#if !defined(TSB_F742275E_B603_4E7A_A115_B2250A8AC4D3)
+#define TSB_F742275E_B603_4E7A_A115_B2250A8AC4D3
 
 #include <string>
 
+#include "always_inline.hpp"
+
 namespace tsb {
 
+///////////////////////////////////////////////////////////////////////////////
+
+// Division via C++ operator. The compiler will optimize this to RCP operations
+// when possible on platforms which have an RCP instruction for the given type.
 template <typename T>
-struct divide
+struct operator_divider
 {
-    T operator()(
-        T num, T den
-        ) const noexcept __attribute__((always_inline));
+    T operator()(T num, T den) const noexcept TSB_ALWAYS_INLINE;
 
     static std::string name() noexcept
     {
@@ -26,7 +30,7 @@ struct divide
 };
 
 template <typename T>
-T divide<T>::operator()(
+inline T operator_divider<T>::operator()(
     T num, T den
     ) const noexcept
 {
@@ -35,5 +39,5 @@ T divide<T>::operator()(
 
 } // tsb
 
-#endif // CXX_5AC3C27C_F3B3_4D90_9630_F0B5807FDFA0
+#endif // TSB_5AC3C27C_F3B3_4D90_9630_F0B5807FDFA0
 

@@ -5,11 +5,13 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 ///////////////////////////////////////////////////////////////////////////////
 
-#if !defined(CXX_27F35FCA_6FAA_48D2_8E99_8E7B386841F5)
-#define CXX_27F35FCA_6FAA_48D2_8E99_8E7B386841F5
+#if !defined(TSB_27F35FCA_6FAA_48D2_8E99_8E7B386841F5)
+#define TSB_27F35FCA_6FAA_48D2_8E99_8E7B386841F5
 
 #include "assume.hpp"
 #include "array3d.hpp"
+
+namespace tsb {
 
 // residual(r, A, u): r = A * u - r
 
@@ -213,14 +215,14 @@ inline void residual(
         auto const ac_stride  = a.stride_y();
         auto const bur_stride = b.stride_y();
 
-        TSB_ASSUME_ALIGNED(r0p, 64);
+        TSB_ASSUME_ALIGNED(r0p, sizeof(T));
 
-        TSB_ASSUME_ALIGNED(b0p, 64);
+        TSB_ASSUME_ALIGNED(b0p, sizeof(T));
 
-        TSB_ASSUME_ALIGNED(c0p, 64);
+        TSB_ASSUME_ALIGNED(c0p, sizeof(T));
 
-        TSB_ASSUME_ALIGNED(u0p, 64);
-        TSB_ASSUME_ALIGNED(u1p, 64);
+        TSB_ASSUME_ALIGNED(u0p, sizeof(T));
+        TSB_ASSUME_ALIGNED(u1p, sizeof(T));
 
         // NOTE: Strided access.
         #pragma simd
@@ -289,14 +291,14 @@ inline void residual(
         auto const ac_stride  = a.stride_y();
         auto const bur_stride = b.stride_y();
 
-        TSB_ASSUME_ALIGNED(rnz1p, 64);
+        TSB_ASSUME_ALIGNED(rnz1p, sizeof(T));
 
-        TSB_ASSUME_ALIGNED(anz2p, 64);
+        TSB_ASSUME_ALIGNED(anz2p, sizeof(T));
 
-        TSB_ASSUME_ALIGNED(bnz1p, 64);
+        TSB_ASSUME_ALIGNED(bnz1p, sizeof(T));
 
-        TSB_ASSUME_ALIGNED(unz2p, 64);
-        TSB_ASSUME_ALIGNED(unz1p, 64);
+        TSB_ASSUME_ALIGNED(unz2p, sizeof(T));
+        TSB_ASSUME_ALIGNED(unz1p, sizeof(T));
 
         // NOTE: Strided access.
         #pragma simd
@@ -327,5 +329,7 @@ inline void residual(
     residual(0, r.ny(), r, a, b, c, u);
 }
 
-#endif // CXX_27F35FCA_6FAA_48D2_8E99_8E7B386841F5
+} // tsb
+
+#endif // TSB_27F35FCA_6FAA_48D2_8E99_8E7B386841F5
 

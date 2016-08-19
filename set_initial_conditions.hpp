@@ -5,11 +5,13 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 ///////////////////////////////////////////////////////////////////////////////
 
-#if !defined(CXX_FE674664_DBCF_40FD_A5C0_EECCA0FBE78F)
-#define CXX_FE674664_DBCF_40FD_A5C0_EECCA0FBE78F
+#if !defined(TSB_FE674664_DBCF_40FD_A5C0_EECCA0FBE78F)
+#define TSB_FE674664_DBCF_40FD_A5C0_EECCA0FBE78F
 
 #include "assume.hpp"
 #include "array3d.hpp"
+
+namespace tsb {
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -109,5 +111,7 @@ void set_initial_conditions(
     }
 }
 
-#endif // CXX_FE674664_DBCF_40FD_A5C0_EECCA0FBE78F
+} // tsb
+
+#endif // TSB_FE674664_DBCF_40FD_A5C0_EECCA0FBE78F
 

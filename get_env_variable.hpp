@@ -8,13 +8,14 @@
 #if !defined(TSB_09005064_7296_4E52_9B06_0A6E950E0F61)
 #define TSB_09005064_7296_4E52_9B06_0A6E950E0F61
 
+#include <cstdlib>
+#include <climits>
+
 #include <string>
 #include <iostream>
 #include <limits>
 
-#include <cstdint>
-#include <cstdlib>
-#include <climits>
+namespace tsb {
 
 template <typename T>
 T get_env_variable(std::string const& var, T default_); 
@@ -120,6 +121,8 @@ float get_env_variable(std::string const& var, float default_)
 
     return r;
 }
+
+} // tsb
 
 #endif // TSB_09005064_7296_4E52_9B06_0A6E950E0F61
 

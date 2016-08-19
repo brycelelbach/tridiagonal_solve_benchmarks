@@ -5,8 +5,8 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 ///////////////////////////////////////////////////////////////////////////////
 
-#if !defined(CXX_384D4B17_47A4_4193_A7E6_35EBF37E47CA)
-#define CXX_384D4B17_47A4_4193_A7E6_35EBF37E47CA
+#if !defined(TSB_384D4B17_47A4_4193_A7E6_35EBF37E47CA)
+#define TSB_384D4B17_47A4_4193_A7E6_35EBF37E47CA
 
 #include <iomanip>
 #include <algorithm>
@@ -23,7 +23,7 @@
 #include "get_env_variable.hpp"
 #include "fp_utils.hpp"
 #include "array3d.hpp"
-#include "x_contiguous_matrix.hpp"
+#include "matrix.hpp"
 
 #include "copy.hpp"
 #include "max_residual.hpp"
@@ -31,27 +31,35 @@
 #include "build_matrix.hpp"
 #include "set_initial_conditions.hpp"
 #include "streaming_solve.hpp"
-#include "divide.hpp"
-#include "nr_rcp_divide.hpp"
+#include "mkl_solve.hpp"
+#include "operator_divider.hpp"
+#include "nr_rcp_divider.hpp"
+#include "align_policies.hpp"
+
+#warning Lift name() to solver_traits?
+
+namespace tsb {
 
 template <typename T>
 struct solver_traits;
 
-template <
-    typename Derived
-  , typename Timer = high_resolution_timer
->
+template <typename Derived>
 struct heat_equation_btcs : enable_fp_exceptions
 {
     using matrix = typename solver_traits<Derived>::matrix;
- 
-    using timer = high_resolution_timer;
-
     using array  = typename matrix::array; 
     using layout = typename array::layout; 
+ 
+    using timer = typename solver_traits<Derived>::timer;
 
     using size_type  = typename array::size_type;
     using value_type = typename array::value_type;
+
+    static_assert(
+           std::is_same<value_type, double>::value
+        || std::is_same<value_type, float>::value
+      , "value_type must be either double or float."
+    );
 
   private:
     Derived& derived() noexcept
@@ -78,7 +86,7 @@ struct heat_equation_btcs : enable_fp_exceptions
 
     size_type const array_base_align;
     size_type const array_align_step;
-    size_type const plane_base_align;
+    size_type const plane_pad;
 
     size_type const ns;  // Number of time steps to take.
     value_type const dt; // Time step size.
@@ -96,17 +104,31 @@ struct heat_equation_btcs : enable_fp_exceptions
     // Allocate the arrays if needed.
     void allocate_arrays()
     { 
+        // Disable any alignment strategies that are not enabled in our
+        // align_policy.
+        auto constexpr ap = solver_traits<Derived>::align_policy;
+
+        auto const array_base_align_ = ( ap | use_array_base_align
+                                       ? array_base_align
+                                       : 64);
+        auto const array_align_step_ = ( ap | use_array_align_step
+                                       ? array_align_step
+                                       : 0);
+        auto const plane_pad_        = ( ap | use_plane_pad
+                                       ? plane_pad
+                                       : 0);
+
         // Allocate storage for the problem state.
-        u.resize(array_base_align, nx, ny, nz, 0, plane_base_align, 0);
+        u.resize(array_base_align_, nx, ny, nz, 0, plane_pad_, 0);
 
         // Allocate storage for the matrix.
         A.resize(
-            array_base_align, array_align_step, plane_base_align
+            array_base_align_, array_align_step_, plane_pad_
           , nx, ny, nz
         );
 
         // Allocate storage for the residual.
-        r.resize(array_base_align, nx, ny, nz);
+        r.resize(array_base_align_, nx, ny, nz);
     }
 
   protected:
@@ -139,7 +161,7 @@ struct heat_equation_btcs : enable_fp_exceptions
       , dz(1.0 / (nz - 1))
       , array_base_align(get_env_variable<size_type>("array_base_align", 1 << 30))
       , array_align_step(get_env_variable<size_type>("array_align_step", 9216))
-      , plane_base_align(get_env_variable<size_type>("plane_base_align", 1152))
+      , plane_pad(get_env_variable<size_type>("plane_pad", 1152))
       , ns(get_env_variable<size_type>("ns", 50))
       , dt(get_env_variable<value_type>("dt", 1.0e-7))
       , D(get_env_variable<value_type>("D", 0.1))
@@ -175,7 +197,7 @@ struct heat_equation_btcs : enable_fp_exceptions
 
         timer t;
 
-        timer::value_type solvertime = 0;
+        typename timer::value_type solvertime = 0;
 
         for (int s = 0; s < ns; ++s)
         {
@@ -215,7 +237,7 @@ struct heat_equation_btcs : enable_fp_exceptions
             }
         }
 
-        timer::value_type const walltime = t.elapsed();
+        typename timer::value_type const walltime = t.elapsed();
 
         value_type const l2 = l2_norm(
             u
@@ -230,6 +252,14 @@ struct heat_equation_btcs : enable_fp_exceptions
                                      / (1 << 30))
                                    / solvertime;
 
+        size_type const problem_size = ( sizeof(value_type)
+                                       * ( (2.0 * nx * ny * nz)
+                                         + (2.0 * nx * ny * (nz - 1))));
+
+        size_type const tile_size = ( sizeof(value_type)
+                                    * ( (2.0 * nx * tw * nz)
+                                      + (2.0 * nx * tw * (nz - 1))));
+
         if (header)
             std::cout <<
                 "Benchmark Variant,"
@@ -237,29 +267,37 @@ struct heat_equation_btcs : enable_fp_exceptions
                 "X (Horizontal) Extent (nx),"
                 "Y (Horizontal) Extent (ny),"
                 "Z (Vertical) Extent (nz),"
+                "Problem Size [bytes],"
                 "Tile Width (tw),"
+                "Tile Size [bytes],"
                 "Array Base Align (bytes),"
                 "Array Align Step (bytes),"
                 "Plane Base Align (bytes),"
                 "# of Timesteps (ns),"
                 "Timestep Size (dt),"
                 "# of Threads,"
-                "Wall Time " << t.units() << ","
-                "Solver Time " << t.units() << ","
-                "Solver Bandwidth (GB/" << t.units() << "),"
+                "Wall Time [" << t.units() << "],"
+                "Solver Time [" << t.units() << "],"
+                "Solver Bandwidth [GB/" << t.units() << "],"
                 "L2 Norm"
                 ;
 
         std::cout
-            << derived().name() << "." << TSB_BUILD_TYPE << ","
+            << derived().name()
+                << ( std::is_same<value_type, double>::value
+                   ? ".DOUBLE-PRECISION."
+                   : ".SINGLE-PRECISION.")
+                << TSB_BUILD_TYPE << ","
             << D << ","
             << nx << ","
             << ny << ","
             << nz << ","
+            << problem_size << ","
             << tw << ","
+            << tile_size << ","
             << array_base_align << ","
             << array_align_step << ","
-            << plane_base_align << ","
+            << plane_pad << ","
             << ns << ","
             << dt << ","
             << omp_get_max_threads() << ","
@@ -271,30 +309,20 @@ struct heat_equation_btcs : enable_fp_exceptions
     }
 };
 
-template <
-    typename T
-  , typename Derived
-  , typename Timer = high_resolution_timer
-    >
-struct heat_equation_btcs_streaming
+///////////////////////////////////////////////////////////////////////////////
+
+template <typename Derived>
+struct heat_equation_btcs_full_matrix
   : heat_equation_btcs<
-        heat_equation_btcs_streaming<T, Derived, Timer>
-      , Timer
+        heat_equation_btcs_full_matrix<Derived>
     >
 {
     using base_type = heat_equation_btcs<
-        heat_equation_btcs_streaming<T, Derived, Timer>
-      , Timer
+        heat_equation_btcs_full_matrix<Derived>
     >;
 
-    using size_type = typename base_type::size_type;
+    using size_type  = typename base_type::size_type;
     using value_type = typename base_type::value_type;
-
-    static_assert(
-           std::is_same<value_type, double>::value
-        || std::is_same<value_type, float>::value
-      , "value_type must be either double or float."
-    );
 
   private:
     Derived& derived() noexcept
@@ -314,6 +342,7 @@ struct heat_equation_btcs_streaming
             this->tw, this->A_coef, this->A.a(), this->A.b(), this->A.c()
         );
 
+        #warning We may be able to lift the set_initial_conditions() call
         set_initial_conditions(
             this->tw, this->u
           , [=] (size_type k) noexcept
@@ -335,42 +364,34 @@ struct heat_equation_btcs_streaming
 
     static std::string name() noexcept
     {
-        return std::string("STREAMING.")
-             + ( std::is_same<value_type, double>::value
-               ? "DOUBLE-PRECISION."
-               : "SINGLE-PRECISION.")
-             + Derived::name();
+        return Derived::name();
     }
 };
 
-template <typename T, typename Derived, typename Timer>
-struct solver_traits<heat_equation_btcs_streaming<T, Derived, Timer> >
-{
-    using matrix = x_contiguous_matrix<T>;
-};
+///////////////////////////////////////////////////////////////////////////////
 
 template <
     typename T
-  , typename Divider = tsb::divide<T>
+  , typename Divider = operator_divider<T>
   , typename Timer   = high_resolution_timer
     >
 struct heat_equation_btcs_streaming_repeated_divide
-  : heat_equation_btcs_streaming<
-        T
-      , heat_equation_btcs_streaming_repeated_divide<T, Divider, Timer>
-      , Timer
+  : heat_equation_btcs_full_matrix<
+        heat_equation_btcs_streaming_repeated_divide<
+            T, Divider, Timer
+        >
     >
 {
-    using base_type = heat_equation_btcs_streaming<
-        T
-      , heat_equation_btcs_streaming_repeated_divide<T, Divider, Timer>
-      , Timer
+    using base_type = heat_equation_btcs_full_matrix<
+        heat_equation_btcs_streaming_repeated_divide<
+            T, Divider, Timer
+        >
     >;
 
-    using size_type = typename base_type::size_type;
-    using value_type = typename base_type::value_type;
-
     using divider = Divider;
+
+    using size_type  = typename base_type::size_type;
+    using value_type = typename base_type::value_type;
 
     void step(size_type s) noexcept
     {
@@ -401,38 +422,53 @@ struct heat_equation_btcs_streaming_repeated_divide
 
     static std::string name() noexcept
     {
-        return std::string("REPEATED-") + divider::name();
+        return std::string("STREAMING.REPEATED-") + divider::name();
     }
 };
 
 template <
     typename T
-  , typename Divider = tsb::divide<T>
-  , typename Timer = high_resolution_timer
+  , typename Divider
+  , typename Timer
+    >
+struct solver_traits<
+    heat_equation_btcs_full_matrix<
+        heat_equation_btcs_streaming_repeated_divide<
+            T, Divider, Timer
+        >
+    >
+> {
+    using matrix = matrix<T, layout_left>;
+
+    using timer = Timer; 
+
+    static align_policy_enum constexpr align_policy = use_all_align_policies;
+};
+
+///////////////////////////////////////////////////////////////////////////////
+
+template <
+    typename T
+  , typename Divider = operator_divider<T>
+  , typename Timer   = high_resolution_timer
     >
 struct heat_equation_btcs_streaming_cached_divide
-  : heat_equation_btcs_streaming<
-        T
-      , heat_equation_btcs_streaming_cached_divide<T, Divider, Timer>
-      , Timer
+  : heat_equation_btcs_full_matrix<
+        heat_equation_btcs_streaming_cached_divide<
+            T, Divider, Timer
+        >
     >
 {
-    using base_type = heat_equation_btcs_streaming<
-        T
-      , heat_equation_btcs_streaming_cached_divide<T, Divider, Timer>
-      , Timer
+    using base_type = heat_equation_btcs_full_matrix<
+        heat_equation_btcs_streaming_cached_divide<
+            T, Divider, Timer
+        >
     >;
 
-    using size_type = typename base_type::size_type;
+    using size_type  = typename base_type::size_type;
     using value_type = typename base_type::value_type;
 
     using divider = Divider;
-
-    static_assert(
-           std::is_same<value_type, double>::value
-        || std::is_same<value_type, float>::value
-      , "value_type must be either double or float."
-    );
 
     void step(size_type s) noexcept
     {
@@ -468,9 +504,92 @@ struct heat_equation_btcs_streaming_cached_divide
 
     static std::string name() noexcept
     {
-        return std::string("CACHED-") + divider::name();
+        return std::string("STREAMING.CACHED-") + divider::name();
     }
 };
 
-#endif // CXX_384D4B17_47A4_4193_A7E6_35EBF37E47CA
+template <
+    typename T
+  , typename Divider
+  , typename Timer
+    >
+struct solver_traits<
+    heat_equation_btcs_full_matrix<
+        heat_equation_btcs_streaming_cached_divide<
+            T, Divider, Timer
+        >
+    >
+> {
+    using matrix = matrix<T, layout_left>;
+
+    using timer = Timer; 
+
+    static align_policy_enum constexpr align_policy = use_all_align_policies;
+};
+
+///////////////////////////////////////////////////////////////////////////////
+
+template <
+    typename T
+  , typename Timer = high_resolution_timer
+    >
+struct heat_equation_btcs_mkl_z_contiguous_full_matrix
+  : heat_equation_btcs_full_matrix<
+        heat_equation_btcs_mkl_z_contiguous_full_matrix<
+            T, Timer
+        >
+    >
+{
+    using base_type = heat_equation_btcs_full_matrix<
+        heat_equation_btcs_mkl_z_contiguous_full_matrix<
+            T, Timer
+        >
+    >;
+
+    using size_type  = typename base_type::size_type;
+    using value_type = typename base_type::value_type;
+
+    void step(size_type s) noexcept
+    {
+        #pragma omp parallel for schedule(static)
+        for (int j = 0; j < this->ny; j += this->tw)
+        {
+            auto const j_begin = j;
+            auto const j_end   = j + this->tw;
+
+            using namespace tsb::mkl;
+
+            solve(
+                j_begin, j_end, this->A.a(), this->A.b(), this->A.c(), this->u
+            );
+        }
+    }
+
+    static std::string name() noexcept
+    {
+        return "MKL.Z-CONTIGUOUS.FULL-MATRIX"; 
+    }
+};
+
+template <
+    typename T
+  , typename Timer
+    >
+struct solver_traits<
+    heat_equation_btcs_full_matrix<
+        heat_equation_btcs_mkl_z_contiguous_full_matrix<
+            T, Timer
+        >
+    >
+> {
+    using matrix = matrix<T, layout_right>;
+
+    using timer = Timer; 
+
+    static align_policy_enum constexpr align_policy = use_array_base_align;
+};
+
+} // tsb
+
+#endif // TSB_384D4B17_47A4_4193_A7E6_35EBF37E47CA
 

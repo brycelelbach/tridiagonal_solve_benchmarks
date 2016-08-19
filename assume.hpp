@@ -5,10 +5,13 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 ///////////////////////////////////////////////////////////////////////////////
 
-#if !defined(CXX_C6134B57_4F3E_4A1D_900E_B93CF6FB93F5)
-#define CXX_C6134B57_4F3E_4A1D_900E_B93CF6FB93F5
+#if !defined(TSB_C6134B57_4F3E_4A1D_900E_B93CF6FB93F5)
+#define TSB_C6134B57_4F3E_4A1D_900E_B93CF6FB93F5
 
 #include <cstdint>
+#include <cassert>
+
+#warning No raw asserts
 
 #if defined(NDEBUG)
     #define TSB_ASSUME(expr)                                                    \
@@ -36,5 +39,5 @@
         /**/
 #endif
 
-#endif // CXX_C6134B57_4F3E_4A1D_900E_B93CF6FB93F5
+#endif // TSB_C6134B57_4F3E_4A1D_900E_B93CF6FB93F5
 

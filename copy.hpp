@@ -5,11 +5,13 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 ///////////////////////////////////////////////////////////////////////////////
 
-#if !defined(CXX_E343F9D4_3FF8_4928_8F22_A6720FC1BD34)
-#define CXX_E343F9D4_3FF8_4928_8F22_A6720FC1BD34
+#if !defined(TSB_E343F9D4_3FF8_4928_8F22_A6720FC1BD34)
+#define TSB_E343F9D4_3FF8_4928_8F22_A6720FC1BD34
 
 #include "assume.hpp"
 #include "array3d.hpp"
+
+namespace tsb {
 
 // copy(dest, src): dest = src 
 
@@ -22,7 +24,7 @@ inline void copy_tile(
   , array3d<T, layout_left>& dest
   , array3d<T, layout_left> const& src
     ) noexcept
-{
+{ // {{{
     auto const nx = src.nx();
     auto const nz = src.nz();
 
@@ -45,7 +47,7 @@ inline void copy_tile(
             for (auto i = 0; i < nx; ++i)
                 destp[i] = srcp[i];
         }
-}
+} // }}}
 
 template <typename T>
 inline void copy(
@@ -53,7 +55,7 @@ inline void copy(
   , array3d<T, layout_left>& dest
   , array3d<T, layout_left> const& src
     ) noexcept
-{
+{ // {{{
     auto const ny = src.ny();
 
     #pragma omp parallel for schedule(static) 
@@ -64,7 +66,7 @@ inline void copy(
 
         copy_tile(j_begin, j_end, dest, src);
     }
-}
+} // }}}
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -75,7 +77,7 @@ inline void copy_tile(
   , array3d<T, layout_right>& dest
   , array3d<T, layout_right> const& src
     ) noexcept
-{
+{ // {{{
     auto const nx = src.nx();
     auto const nz = src.nz();
 
@@ -98,7 +100,7 @@ inline void copy_tile(
             for (auto k = 0; k < nz; ++k)
                 destp[k] = srcp[k];
         }
-}
+} // }}}
 
 template <typename T>
 inline void copy(
@@ -106,7 +108,7 @@ inline void copy(
   , array3d<T, layout_right>& dest
   , array3d<T, layout_right> const& src
     ) noexcept
-{
+{ // {{{
     auto const ny = src.ny();
 
     #pragma omp parallel for schedule(static) 
@@ -117,7 +119,9 @@ inline void copy(
 
         copy_tile(j_begin, j_end, dest, src);
     }
-}
+} // }}}
 
-#endif // CXX_E343F9D4_3FF8_4928_8F22_A6720FC1BD34
+} // tsb
+
+#endif // TSB_E343F9D4_3FF8_4928_8F22_A6720FC1BD34
 

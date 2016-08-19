@@ -5,23 +5,29 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 ///////////////////////////////////////////////////////////////////////////////
 
-#if !defined(CXX_A983ED3B_3C3B_42AF_8057_C5E91CA3242B)
-#define CXX_A983ED3B_3C3B_42AF_8057_C5E91CA3242B
+#if !defined(TSB_A983ED3B_3C3B_42AF_8057_C5E91CA3242B)
+#define TSB_A983ED3B_3C3B_42AF_8057_C5E91CA3242B
+
+#include <cfenv>
 
 #include <type_traits>
 #include <limits>
 
-#include <cfenv>
+namespace tsb {
+
+///////////////////////////////////////////////////////////////////////////////
 
 struct enable_fp_exceptions
 {
-    enable_fp_exceptions()
+    enable_fp_exceptions() noexcept
     {
         ::feenableexcept(FE_DIVBYZERO);
         ::feenableexcept(FE_INVALID);
         ::feenableexcept(FE_OVERFLOW);
     }
 };
+
+///////////////////////////////////////////////////////////////////////////////
 
 template <typename T>
 constexpr bool fp_equals(
@@ -37,5 +43,7 @@ constexpr bool fp_equals(
            : false);
 }
 
-#endif // CXX_A983ED3B_3C3B_42AF_8057_C5E91CA3242B
+} // tsb
+
+#endif // TSB_A983ED3B_3C3B_42AF_8057_C5E91CA3242B
 

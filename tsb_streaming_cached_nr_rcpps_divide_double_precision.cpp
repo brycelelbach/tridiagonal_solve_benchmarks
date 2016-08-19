@@ -7,13 +7,11 @@
 
 #include "heat_equation_btcs.hpp"
 
-///////////////////////////////////////////////////////////////////////////////
-
 int main()
 {
-    heat_equation_btcs_streaming_cached_divide<
+    tsb::heat_equation_btcs_streaming_cached_divide<
         double
-      , tsb::divide<double>
+      , tsb::nr_rcp_divider<double, float>
     > s;
 
     s.run();

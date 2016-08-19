@@ -5,12 +5,11 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 ///////////////////////////////////////////////////////////////////////////////
 
-#if !defined(CXX_05BBEF11_9A8F_459D_AD2B_212A813271EC)
-#define CXX_05BBEF11_9A8F_459D_AD2B_212A813271EC
-
-#include <functional>
+#if !defined(TSB_05BBEF11_9A8F_459D_AD2B_212A813271EC)
+#define TSB_05BBEF11_9A8F_459D_AD2B_212A813271EC
 
 #include "assume.hpp"
+#include "always_inline.hpp"
 #include "array3d.hpp"
 
 namespace tsb { namespace streaming
@@ -26,7 +25,7 @@ inline void pre_elimination(
   , typename array3d<T, layout_left>::size_type j_end
   , array3d<T, layout_left>& b                 // Diagonal.
   , F f
-    ) noexcept __attribute__((always_inline));
+    ) noexcept TSB_ALWAYS_INLINE;
 
 template <typename T, typename F>
 inline void pre_elimination(
@@ -64,7 +63,7 @@ inline void forward_elimination(
   , array3d<T, layout_left> const& c           // Upper band.
   , array3d<T, layout_left>& u                 // Solution.
   , F f
-    ) noexcept __attribute__((always_inline));
+    ) noexcept TSB_ALWAYS_INLINE;
 
 template <typename T, typename F>
 inline void forward_elimination(
@@ -82,17 +81,17 @@ inline void forward_elimination(
 
     TSB_ASSUME(0 == (nx % 16)); // Assume unit stride is divisible by 16.
 
-    assert(u.nx() == a.nx());
-    assert(u.ny() == a.ny());
-    assert(u.nz() == a.nz());
+    TSB_ASSUME(u.nx() == a.nx());
+    TSB_ASSUME(u.ny() == a.ny());
+    TSB_ASSUME(u.nz() == a.nz());
 
-    assert(u.nx() == b.nx());
-    assert(u.ny() == b.ny());
-    assert(u.nz() == b.nz());
+    TSB_ASSUME(u.nx() == b.nx());
+    TSB_ASSUME(u.ny() == b.ny());
+    TSB_ASSUME(u.nz() == b.nz());
 
-    assert(u.nx() == c.nx());
-    assert(u.ny() == c.ny());
-    assert(u.nz() == c.nz());
+    TSB_ASSUME(u.nx() == c.nx());
+    TSB_ASSUME(u.ny() == c.ny());
+    TSB_ASSUME(u.nz() == c.nz());
 
     // Forward Elimination: (nz - 1) * (j_end - j_begin) * (nx) iterations
     for (auto k = 1; k < nz; ++k)
@@ -133,7 +132,7 @@ inline void pre_substitution(
   , array3d<T, layout_left> const& b           // Diagonal.
   , array3d<T, layout_left>& u                 // Solution.
   , F f
-    ) noexcept __attribute__((always_inline));
+    ) noexcept TSB_ALWAYS_INLINE;
 
 template <typename T, typename F>
 inline void pre_substitution(
@@ -149,9 +148,9 @@ inline void pre_substitution(
 
     TSB_ASSUME(0 == (nx % 16)); // Assume unit stride is divisible by 16.
 
-    assert(u.nx() == b.nx());
-    assert(u.ny() == b.ny());
-    assert(u.nz() == b.nz());
+    TSB_ASSUME(u.nx() == b.nx());
+    TSB_ASSUME(u.ny() == b.ny());
+    TSB_ASSUME(u.nz() == b.nz());
 
     // Pre-Substitution: (j_end - j_begin) * (nx) iterations
     for (auto j = j_begin; j < j_end; ++j)
@@ -180,7 +179,7 @@ inline void back_substitution(
   , array3d<T, layout_left> const& c           // Upper band.
   , array3d<T, layout_left>& u                 // Solution.
   , F f
-    ) noexcept __attribute__((always_inline));
+    ) noexcept TSB_ALWAYS_INLINE;
 
 template <typename T, typename F>
 inline void back_substitution(
@@ -197,13 +196,13 @@ inline void back_substitution(
 
     TSB_ASSUME(0 == (nx % 16)); // Assume unit stride is divisible by 16.
 
-    assert(u.nx() == b.nx());
-    assert(u.ny() == b.ny());
-    assert(u.nz() == b.nz());
+    TSB_ASSUME(u.nx() == b.nx());
+    TSB_ASSUME(u.ny() == b.ny());
+    TSB_ASSUME(u.nz() == b.nz());
 
-    assert(u.nx() == c.nx());
-    assert(u.ny() == c.ny());
-    assert(u.nz() == c.nz());
+    TSB_ASSUME(u.nx() == c.nx());
+    TSB_ASSUME(u.ny() == c.ny());
+    TSB_ASSUME(u.nz() == c.nz());
  
     // Back Substitution: (nz - 1) * (j_end - j_begin) * (nx) iterations
     for (auto k = nz - 2; k >= 0; --k)
@@ -243,7 +242,7 @@ inline void forward_elimination_kernel(
   , T const __restrict__ csub1p
   , T const __restrict__ usub1p
   , T& __restrict__      up
-    ) noexcept __attribute__((always_inline));
+    ) noexcept TSB_ALWAYS_INLINE;
 
 template <typename T, typename Divider>
 inline void forward_elimination_kernel(
@@ -270,7 +269,7 @@ template <typename T, typename Divider = std::divides<T> >
 inline void pre_substitution_kernel(
     T const __restrict__ bendp
   , T& __restrict__      uendp
-    ) noexcept __attribute__((always_inline));
+    ) noexcept TSB_ALWAYS_INLINE;
 
 template <typename T, typename Divider>
 inline void pre_substitution_kernel(
@@ -290,7 +289,7 @@ inline void back_substitution_kernel(
   , T const __restrict__ cp
   , T& __restrict__      up
   , T const __restrict__ uadd1p
-    ) noexcept __attribute__((always_inline));
+    ) noexcept TSB_ALWAYS_INLINE;
 
 template <typename T, typename Divider>
 inline void back_substitution_kernel(
@@ -315,7 +314,7 @@ namespace cached_divide {
 template <typename T, typename Divider = std::divides<T> >
 inline void pre_elimination_kernel(
     T& __restrict__ bbeginp
-    ) noexcept __attribute__((always_inline));
+    ) noexcept TSB_ALWAYS_INLINE;
 
 template <typename T, typename Divider>
 inline void pre_elimination_kernel(
@@ -336,7 +335,7 @@ inline void forward_elimination_kernel(
   , T const __restrict__ csub1p
   , T const __restrict__ usub1p
   , T& __restrict__      up
-    ) noexcept __attribute__((always_inline));
+    ) noexcept TSB_ALWAYS_INLINE;
 
 template <typename T, typename Divider>
 inline void forward_elimination_kernel(
@@ -363,7 +362,7 @@ template <typename T>
 inline void pre_substitution_kernel(
     T const __restrict__ bendp
   , T& __restrict__      uendp
-    ) noexcept __attribute__((always_inline));
+    ) noexcept TSB_ALWAYS_INLINE;
 
 template <typename T>
 inline void pre_substitution_kernel(
@@ -381,7 +380,7 @@ inline void back_substitution_kernel(
   , T const __restrict__ cp
   , T& __restrict__      up
   , T const __restrict__ uadd1p
-    ) noexcept __attribute__((always_inline));
+    ) noexcept TSB_ALWAYS_INLINE;
 
 template <typename T>
 inline void back_substitution_kernel(
@@ -399,5 +398,5 @@ inline void back_substitution_kernel(
 
 }} // tsb::streaming
 
-#endif // CXX_05BBEF11_9A8F_459D_AD2B_212A813271EC
+#endif // TSB_05BBEF11_9A8F_459D_AD2B_212A813271EC
 

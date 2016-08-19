@@ -5,18 +5,20 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 ///////////////////////////////////////////////////////////////////////////////
 
-#if !defined(CXX_E5D6612B_CFD5_4B71_A0C7_55DA931643A4)
-#define CXX_E5D6612B_CFD5_4B71_A0C7_55DA931643A4
+#if !defined(TSB_E5D6612B_CFD5_4B71_A0C7_55DA931643A4)
+#define TSB_E5D6612B_CFD5_4B71_A0C7_55DA931643A4
 
 #include <utility>
 
 #include "assume.hpp"
 #include "array3d.hpp"
 
-template <typename T>
-struct x_contiguous_matrix
+namespace tsb {
+
+template <typename T, typename Layout>
+struct matrix
 {
-    using array = array3d<T, layout_left>;
+    using array = array3d<T, Layout>;
 
     using size_type  = typename array::size_type;
     using value_type = typename array::value_type;
@@ -30,7 +32,7 @@ struct x_contiguous_matrix
     void resize(
         size_type array_base_align
       , size_type array_align_step
-      , size_type plane_base_align
+      , size_type plane_pad
       , size_type nx, size_type ny, size_type nz
         ) noexcept
     {
@@ -40,19 +42,19 @@ struct x_contiguous_matrix
         a_.resize(
             array_base_align + 1 * array_align_step
           , nx, ny, nz
-          , 0, plane_base_align, 0
+          , 0, plane_pad, 0
         );
 
         b_.resize(
             array_base_align + 2 * array_align_step
           , nx, ny, nz
-          , 0, plane_base_align, 0
+          , 0, plane_pad, 0
         );
 
         c_.resize(
             array_base_align + 3 * array_align_step
           , nx, ny, nz
-          , 0, plane_base_align, 0
+          , 0, plane_pad, 0
         );
     }
 
@@ -84,5 +86,7 @@ struct x_contiguous_matrix
     }
 };
 
-#endif // CXX_E5D6612B_CFD5_4B71_A0C7_55DA931643A4
+} // tsb
+
+#endif // TSB_E5D6612B_CFD5_4B71_A0C7_55DA931643A4
 

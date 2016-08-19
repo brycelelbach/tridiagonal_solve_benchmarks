@@ -5,11 +5,15 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 ///////////////////////////////////////////////////////////////////////////////
 
-#if !defined(CXX_5EFF3C90_3CCA_4533_8568_64072592C585)
-#define CXX_5EFF3C90_3CCA_4533_8568_64072592C585
+#if !defined(TSB_5EFF3C90_3CCA_4533_8568_64072592C585)
+#define TSB_5EFF3C90_3CCA_4533_8568_64072592C585
+
+#include <cmath>
 
 #include "assume.hpp"
 #include "array3d.hpp"
+
+namespace tsb {
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -102,5 +106,7 @@ inline T l2_norm(array3d<T, layout_right> const& u, Exact&& exact) noexcept
     return l2;
 }
 
-#endif // CXX_5EFF3C90_3CCA_4533_8568_64072592C585
+} // tsb
+
+#endif // TSB_5EFF3C90_3CCA_4533_8568_64072592C585
 

@@ -5,16 +5,18 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 ///////////////////////////////////////////////////////////////////////////////
 
-#if !defined(CXX_4D7778C5_461A_412C_81EA_40CA5280ABB5)
-#define CXX_4D7778C5_461A_412C_81EA_40CA5280ABB5
+#if !defined(TSB_4D7778C5_461A_412C_81EA_40CA5280ABB5)
+#define TSB_4D7778C5_461A_412C_81EA_40CA5280ABB5
 
 #include "assume.hpp"
 #include "array3d.hpp"
 
+namespace tsb {
+
 ///////////////////////////////////////////////////////////////////////////////
 
 template <typename T>
-void build_matrix_tile(
+inline void build_matrix_tile(
     typename array3d<T, layout_left>::size_type j_begin
   , typename array3d<T, layout_left>::size_type j_end
   , T A_coef
@@ -22,7 +24,7 @@ void build_matrix_tile(
   , array3d<T, layout_left>& b // Diagonal
   , array3d<T, layout_left>& c // Upper band
     ) noexcept
-{
+{ // {{{
     auto const nx = b.nx();
     auto const nz = b.nz();
 
@@ -82,17 +84,17 @@ void build_matrix_tile(
             aendp[i]   = 0.0; bendp[i]   = 1.0;
         }
     }
-}
+} // }}}
 
 template <typename T>
-void build_matrix(
+inline void build_matrix(
     typename array3d<T, layout_left>::size_type tw
   , T A_coef
   , array3d<T, layout_left>& a // Lower band
   , array3d<T, layout_left>& b // Diagonal
   , array3d<T, layout_left>& c // Upper band
     ) noexcept
-{
+{ // {{{
     auto const ny = b.ny();
 
     #pragma omp parallel for schedule(static) 
@@ -103,12 +105,12 @@ void build_matrix(
 
         build_matrix_tile(j_begin, j_end, A_coef, a, b, c);
     }
-}
+} // }}}
 
 ///////////////////////////////////////////////////////////////////////////////
 
 template <typename T>
-void build_matrix_tile(
+inline void build_matrix_tile(
     typename array3d<T, layout_right>::size_type j_begin
   , typename array3d<T, layout_right>::size_type j_end
   , T A_coef
@@ -116,7 +118,7 @@ void build_matrix_tile(
   , array3d<T, layout_right>& b // Diagonal
   , array3d<T, layout_right>& c // Upper band
     ) noexcept
-{
+{ // {{{
     auto const nx = b.nx();
     auto const nz = b.nz();
 
@@ -162,11 +164,11 @@ void build_matrix_tile(
         auto const ac_stride = a.stride_y();
         auto const b_stride  = b.stride_y();
 
-        TSB_ASSUME_ALIGNED(bbeginp, 64);
-        TSB_ASSUME_ALIGNED(cbeginp, 64);
+        TSB_ASSUME_ALIGNED(bbeginp, sizeof(T));
+        TSB_ASSUME_ALIGNED(cbeginp, sizeof(T));
 
-        TSB_ASSUME_ALIGNED(aendp, 64);
-        TSB_ASSUME_ALIGNED(bendp, 64);
+        TSB_ASSUME_ALIGNED(aendp, sizeof(T));
+        TSB_ASSUME_ALIGNED(bendp, sizeof(T));
 
         // NOTE: Strided access.
         #pragma simd
@@ -179,17 +181,17 @@ void build_matrix_tile(
             aendp[jacs]  = 0.0; bendp[jbs]    = 1.0;
         }
     }
-}
+} // }}}
 
 template <typename T>
-void build_matrix(
+inline void build_matrix(
     typename array3d<T, layout_right>::size_type tw
   , T A_coef
   , array3d<T, layout_right>& a // Lower band
   , array3d<T, layout_right>& b // Diagonal
   , array3d<T, layout_right>& c // Upper band
     ) noexcept
-{
+{ // {{{
     auto const ny = b.ny();
 
     #pragma omp parallel for schedule(static) 
@@ -200,7 +202,9 @@ void build_matrix(
 
         build_matrix_tile(j_begin, j_end, A_coef, a, b, c);
     }
-}
+} // }}}
 
-#endif // CXX_4D7778C5_461A_412C_81EA_40CA5280ABB5
+} // tsb
+
+#endif // TSB_4D7778C5_461A_412C_81EA_40CA5280ABB5
 

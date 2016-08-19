@@ -5,14 +5,16 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 ///////////////////////////////////////////////////////////////////////////////
 
-#if !defined(CXX_F50DCB2B_69E6_4867_8160_5D41D27CCA7D)
-#define CXX_F50DCB2B_69E6_4867_8160_5D41D27CCA7D
+#if !defined(TSB_F50DCB2B_69E6_4867_8160_5D41D27CCA7D)
+#define TSB_F50DCB2B_69E6_4867_8160_5D41D27CCA7D
 
 #include <limits>
 
 #include "assume.hpp"
 #include "array3d.hpp"
 #include "residual.hpp"
+
+namespace tsb {
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -149,4 +151,6 @@ inline T max_residual(
     return max_residual(0, r.ny(), r, a, b, c, u);
 }
 
-#endif // CXX_F50DCB2B_69E6_4867_8160_5D41D27CCA7D
+} // tsb
+
+#endif // TSB_F50DCB2B_69E6_4867_8160_5D41D27CCA7D

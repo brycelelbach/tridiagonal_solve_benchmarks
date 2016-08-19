@@ -5,19 +5,20 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 ///////////////////////////////////////////////////////////////////////////////
 
-#if !defined(CXX_CC1C4B22_3289_48FD_AE9B_BB88B3928D01)
-#define CXX_CC1C4B22_3289_48FD_AE9B_BB88B3928D01
-
-#include <memory>
-#include <type_traits>
+#if !defined(TSB_CC1C4B22_3289_48FD_AE9B_BB88B3928D01)
+#define TSB_CC1C4B22_3289_48FD_AE9B_BB88B3928D01
 
 #include <cstdint>
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
-#include <cassert>
+
+#include <memory>
+#include <type_traits> 
 
 #include "assume.hpp"
+
+namespace tsb {
 
 template <typename T>
 inline constexpr typename std::enable_if<
@@ -82,15 +83,15 @@ inline aligned_array_ptr<T> make_aligned_array_posix_memalign(
   , std::ptrdiff_t size
     ) noexcept
 {
-    assert(true == is_power_of_2(alignment));
+    TSB_ASSUME(true == is_power_of_2(alignment));
 
     void* p = 0;
     int const r = ::posix_memalign(&p, alignment, size * sizeof(T));
-    assert(0 == r);
+    TSB_ASSUME(0 == r);
 
     TSB_ASSUME_ALIGNED(p, 2 * sizeof(void*));
 
-    ::memset(p, 0, size * sizeof(T));
+    std::memset(p, 0, size * sizeof(T));
 
     return aligned_array_ptr<T>(
         alignment, size, reinterpret_cast<T*>(p), reinterpret_cast<T*>(p)
@@ -105,15 +106,15 @@ inline aligned_array_ptr<T> make_aligned_array_overallocate(
 {
     auto const space = (size * sizeof(T)) + alignment;
 
-    void* p = ::malloc(space);
-    assert(p);
+    void* p = std::malloc(space);
+    TSB_ASSUME(p);
 
     void* ap = align_ptr(p, alignment, size * sizeof(T), space);
-    assert(ap);
+    TSB_ASSUME(ap);
 
     TSB_ASSUME_ALIGNED(ap, 2 * sizeof(void*));
 
-    ::memset(ap, 0, size * sizeof(T));
+    std::memset(ap, 0, size * sizeof(T));
 
     return aligned_array_ptr<T>(
         alignment, size, reinterpret_cast<T*>(p), reinterpret_cast<T*>(ap)
@@ -128,7 +129,7 @@ inline aligned_array_ptr<T> make_aligned_array(
 {
     static_assert(true == std::is_pod<T>::value, "T must be POD");
 
-    assert(0 == (alignment % (2 * sizeof(void*))));
+    TSB_ASSUME(0 == (alignment % (2 * sizeof(void*))));
 
     if (is_power_of_2(alignment))
         return make_aligned_array_posix_memalign<T>(alignment, size);
@@ -143,7 +144,7 @@ struct free_deleter
 {
     void operator()(T* p) const noexcept
     {
-        ::free(p);
+        std::free(p);
     }
 };
 
@@ -239,5 +240,7 @@ struct aligned_array_ptr
     }
 };
 
-#endif // CXX_CC1C4B22_3289_48FD_AE9B_BB88B3928D01
+} // tsb
+
+#endif // TSB_CC1C4B22_3289_48FD_AE9B_BB88B3928D01
 

@@ -5,19 +5,26 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 ///////////////////////////////////////////////////////////////////////////////
 
-#if !defined(CXX_5AC3C27C_F3B3_4D90_9630_F0B5807FDFA0)
-#define CXX_5AC3C27C_F3B3_4D90_9630_F0B5807FDFA0
+#if !defined(TSB_DC83EDD6_093D_4373_87A3_1469B32A1CB0)
+#define TSB_DC83EDD6_093D_4373_87A3_1469B32A1CB0
 
-#include <cstdint>
+#include <cstddef>
+
+#include <string>
+#include <type_traits>
+
+#include "always_inline.hpp"
 
 namespace tsb {
+
+///////////////////////////////////////////////////////////////////////////////
 
 // Newton-Raphson division estimation using fast reciprocal (RCP) instructions.
 // The RCPPrecision parameter specifies the precision of the RCP instruction
 // used (AVX platforms prior to AVX512 only have a single-precision RCP
 // instruction).
 template <typename T, typename RCPPrecision, std::ptrdiff_t NRIterations = 1>
-struct nr_rcp_divide
+struct nr_rcp_divider
 {
     static_assert(
            std::is_same<T, double>::value
@@ -33,9 +40,7 @@ struct nr_rcp_divide
 
     static_assert(NRIterations >= 0, "NRIterations cannot be negative.");
 
-    T operator()(
-        T num, T den
-        ) const noexcept __attribute__((always_inline));
+    T operator()(T num, T den) const noexcept TSB_ALWAYS_INLINE;
 
     static std::string name() noexcept
     {
@@ -48,7 +53,7 @@ struct nr_rcp_divide
 };
 
 template <typename T, typename RCPPrecision, std::ptrdiff_t NRIterations>
-T nr_rcp_divide<T, RCPPrecision, NRIterations>::operator()(
+T nr_rcp_divider<T, RCPPrecision, NRIterations>::operator()(
     T num, T den
     ) const noexcept
 {
@@ -63,5 +68,5 @@ T nr_rcp_divide<T, RCPPrecision, NRIterations>::operator()(
 
 } // tsb
 
-#endif // CXX_5AC3C27C_F3B3_4D90_9630_F0B5807FDFA0
+#endif // TSB_DC83EDD6_093D_4373_87A3_1469B32A1CB0
 
