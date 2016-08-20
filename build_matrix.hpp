@@ -164,11 +164,11 @@ inline void build_matrix_tile(
         auto const ac_stride = a.stride_y();
         auto const b_stride  = b.stride_y();
 
-        TSB_ASSUME_ALIGNED(bbeginp, sizeof(T));
-        TSB_ASSUME_ALIGNED(cbeginp, sizeof(T));
+        TSB_ASSUME_ALIGNED(bbeginp, 8);
+        TSB_ASSUME_ALIGNED(cbeginp, 8);
 
-        TSB_ASSUME_ALIGNED(aendp, sizeof(T));
-        TSB_ASSUME_ALIGNED(bendp, sizeof(T));
+        TSB_ASSUME_ALIGNED(aendp, 8);
+        TSB_ASSUME_ALIGNED(bendp, 8);
 
         // NOTE: Strided access.
         #pragma simd

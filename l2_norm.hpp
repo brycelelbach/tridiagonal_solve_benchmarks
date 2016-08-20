@@ -37,7 +37,7 @@ inline T l2_norm(array3d<T, layout_left> const& u, Exact&& exact) noexcept
 
             auto const stride = u.stride_z();
 
-            TSB_ASSUME_ALIGNED(up, sizeof(T));
+            TSB_ASSUME_ALIGNED(up, 8);
 
             // NOTE: Strided access.
             #pragma simd

@@ -215,14 +215,14 @@ inline void residual(
         auto const ac_stride  = a.stride_y();
         auto const bur_stride = b.stride_y();
 
-        TSB_ASSUME_ALIGNED(r0p, sizeof(T));
+        TSB_ASSUME_ALIGNED(r0p, 8);
 
-        TSB_ASSUME_ALIGNED(b0p, sizeof(T));
+        TSB_ASSUME_ALIGNED(b0p, 8);
 
-        TSB_ASSUME_ALIGNED(c0p, sizeof(T));
+        TSB_ASSUME_ALIGNED(c0p, 8);
 
-        TSB_ASSUME_ALIGNED(u0p, sizeof(T));
-        TSB_ASSUME_ALIGNED(u1p, sizeof(T));
+        TSB_ASSUME_ALIGNED(u0p, 8);
+        TSB_ASSUME_ALIGNED(u1p, 8);
 
         // NOTE: Strided access.
         #pragma simd
@@ -291,14 +291,14 @@ inline void residual(
         auto const ac_stride  = a.stride_y();
         auto const bur_stride = b.stride_y();
 
-        TSB_ASSUME_ALIGNED(rnz1p, sizeof(T));
+        TSB_ASSUME_ALIGNED(rnz1p, 8);
 
-        TSB_ASSUME_ALIGNED(anz2p, sizeof(T));
+        TSB_ASSUME_ALIGNED(anz2p, 8);
 
-        TSB_ASSUME_ALIGNED(bnz1p, sizeof(T));
+        TSB_ASSUME_ALIGNED(bnz1p, 8);
 
-        TSB_ASSUME_ALIGNED(unz2p, sizeof(T));
-        TSB_ASSUME_ALIGNED(unz1p, sizeof(T));
+        TSB_ASSUME_ALIGNED(unz2p, 8);
+        TSB_ASSUME_ALIGNED(unz1p, 8);
 
         // NOTE: Strided access.
         #pragma simd
