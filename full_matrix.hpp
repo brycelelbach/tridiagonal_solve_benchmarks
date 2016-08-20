@@ -8,15 +8,13 @@
 #if !defined(TSB_E5D6612B_CFD5_4B71_A0C7_55DA931643A4)
 #define TSB_E5D6612B_CFD5_4B71_A0C7_55DA931643A4
 
-#include <utility>
-
 #include "assume.hpp"
 #include "array3d.hpp"
 
 namespace tsb {
 
 template <typename T, typename Layout>
-struct matrix
+struct full_matrix
 {
     using array = array3d<T, Layout>;
 
@@ -37,7 +35,7 @@ struct matrix
         ) noexcept
     {
         // Allocate storage for the matrix. a and c technically have dimensions
-        // of nx * ny * (nz - 1), but we make then nx * ny * nz to simplify the
+        // of nx * ny * (nz - 1), but we make them nx * ny * nz to simplify the
         // padding math.
         a_.resize(
             array_base_align + 1 * array_align_step

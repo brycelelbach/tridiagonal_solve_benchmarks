@@ -22,7 +22,8 @@
 #include "get_env_variable.hpp"
 #include "fp_utils.hpp"
 #include "array3d.hpp"
-#include "matrix.hpp"
+#include "full_matrix.hpp"
+#include "rolling_matrix.hpp"
 
 #include "copy.hpp"
 #include "max_residual.hpp"
@@ -36,6 +37,8 @@
 #include "align_policies.hpp"
 
 #warning Lift name() to solver_traits?
+
+#warning Do chunking for step()'s parallel for manually and go back to per-thread timing
 
 namespace tsb {
 
@@ -437,7 +440,7 @@ struct solver_traits<
         >
     >
 > {
-    using matrix = matrix<T, layout_left>;
+    using matrix = full_matrix<T, layout_left>;
 
     using timer = Timer; 
 
@@ -519,7 +522,7 @@ struct solver_traits<
         >
     >
 > {
-    using matrix = matrix<T, layout_left>;
+    using matrix = full_matrix<T, layout_left>;
 
     using timer = Timer; 
 
@@ -581,7 +584,7 @@ struct solver_traits<
         >
     >
 > {
-    using matrix = matrix<T, layout_right>;
+    using matrix = full_matrix<T, layout_right>;
 
     using timer = Timer; 
 
