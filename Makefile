@@ -4,10 +4,11 @@
 # file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 ###############################################################################
 
+# ARCH=AVX|AVX2|AVX512 (default: AVX)
+# TEST=0|1             (default: 1)
 # DEBUG=0|1            (default: 0)
 # STATIC=0|1           (default: 1 if not debug)
 # ASSERTS=0|1          (default: 1)
-# ARCH=AVX|AVX2|AVX512 (default: AVX)
 
 CXX=icpc
 
@@ -33,6 +34,10 @@ else ifeq ($(ARCH),AVX2)
 else
   BUILD_TYPE=AVX
   CXXFLAGS+=-xAVX -DTSB_ARCH_AVX
+endif
+
+ifeq ($(TEST),)
+  TEST=1
 endif
 
 ifeq ($(DEBUG),1)     # DEBUG == 1
@@ -97,8 +102,11 @@ clean:
 	@echo "Building $(*F)"
 	$(CXX) $(if $(findstring mkl,$<),$(MKLFLAGS) $(CXXFLAGS),$(CXXFLAGS)) $< -o $(CURDIR)/build/$(*F)
 	@echo "********************************************************************************"
-	@echo "Running $(*F)"
-	@OMP_NUM_THREADS=1 build/$(*F)
+	@if [ $(TEST) -eq 1 ]; then                                                                 \
+	   echo "Running $(*F)";                                                                    \
+	   OMP_NUM_THREADS=1 build/$(*F);                                                           \
+	   echo "********************************************************************************"; \
+	fi
 	@echo
 
 %.asm : %.cpp directory
@@ -108,6 +116,7 @@ clean:
 	@echo "********************************************************************************"
 	@echo "Generating optimization report for $(*F)"
 	$(CXX) $(if $(findstring mkl,$<),$(MKLFLAGS) $(CXXFLAGS),$(CXXFLAGS)) $(OPTREPORTFLAGS) $< -o $(CURDIR)/build/$(*F)
+	@echo "********************************************************************************"
 	@echo
 
 $(DIRECTORY)/:
