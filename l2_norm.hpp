@@ -12,6 +12,7 @@
 
 #include "assume.hpp"
 #include "array3d.hpp"
+#include "fp_equals.hpp"
 
 namespace tsb {
 

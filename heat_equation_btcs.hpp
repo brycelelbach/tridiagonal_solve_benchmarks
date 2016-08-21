@@ -20,7 +20,7 @@
 #include "assume.hpp"
 #include "timers.hpp"
 #include "get_env_variable.hpp"
-#include "fp_utils.hpp"
+#include "enable_fp_exceptions.hpp"
 #include "array3d.hpp"
 #include "full_matrix.hpp"
 #include "rolling_matrix.hpp"

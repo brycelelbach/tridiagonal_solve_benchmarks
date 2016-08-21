@@ -8,26 +8,11 @@
 #if !defined(TSB_A983ED3B_3C3B_42AF_8057_C5E91CA3242B)
 #define TSB_A983ED3B_3C3B_42AF_8057_C5E91CA3242B
 
-#include <cfenv>
-
 #include <type_traits>
 #include <limits>
 
-namespace tsb {
-
-///////////////////////////////////////////////////////////////////////////////
-
-struct enable_fp_exceptions
+namespace tsb
 {
-    enable_fp_exceptions() noexcept
-    {
-        ::feenableexcept(FE_DIVBYZERO);
-        ::feenableexcept(FE_INVALID);
-        ::feenableexcept(FE_OVERFLOW);
-    }
-};
-
-///////////////////////////////////////////////////////////////////////////////
 
 template <typename T>
 constexpr bool fp_equals(
