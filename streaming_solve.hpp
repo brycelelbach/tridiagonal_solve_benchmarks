@@ -82,15 +82,12 @@ inline void forward_elimination(
     TSB_ASSUME(0 == (nx % 16)); // Assume unit stride is divisible by 16.
 
     TSB_ASSUME(u.nx() == a.nx());
-    TSB_ASSUME(u.ny() == a.ny());
     TSB_ASSUME(u.nz() == a.nz());
 
     TSB_ASSUME(u.nx() == b.nx());
-    TSB_ASSUME(u.ny() == b.ny());
     TSB_ASSUME(u.nz() == b.nz());
 
     TSB_ASSUME(u.nx() == c.nx());
-    TSB_ASSUME(u.ny() == c.ny());
     TSB_ASSUME(u.nz() == c.nz());
 
     // Forward Elimination: (nz - 1) * (j_end - j_begin) * (nx) iterations
@@ -149,7 +146,6 @@ inline void pre_substitution(
     TSB_ASSUME(0 == (nx % 16)); // Assume unit stride is divisible by 16.
 
     TSB_ASSUME(u.nx() == b.nx());
-    TSB_ASSUME(u.ny() == b.ny());
     TSB_ASSUME(u.nz() == b.nz());
 
     // Pre-Substitution: (j_end - j_begin) * (nx) iterations
@@ -197,11 +193,9 @@ inline void back_substitution(
     TSB_ASSUME(0 == (nx % 16)); // Assume unit stride is divisible by 16.
 
     TSB_ASSUME(u.nx() == b.nx());
-    TSB_ASSUME(u.ny() == b.ny());
     TSB_ASSUME(u.nz() == b.nz());
 
     TSB_ASSUME(u.nx() == c.nx());
-    TSB_ASSUME(u.ny() == c.ny());
     TSB_ASSUME(u.nz() == c.nz());
  
     // Back Substitution: (nz - 1) * (j_end - j_begin) * (nx) iterations
