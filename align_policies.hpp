@@ -14,7 +14,9 @@ namespace tsb {
 
 enum align_policy_enum
 {
-    use_array_base_align = TSB_BINARY(0001)
+    use_no_align_policies = 0
+
+  , use_array_base_align = TSB_BINARY(0001)
   , use_array_align_step = TSB_BINARY(0010)
   , use_plane_pad        = TSB_BINARY(0100)
 
