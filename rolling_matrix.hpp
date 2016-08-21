@@ -5,8 +5,8 @@
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 ///////////////////////////////////////////////////////////////////////////////
 
-#if !defined(TSB_E5D6612B_CFD5_4B71_A0C7_55DA931643A4)
-#define TSB_E5D6612B_CFD5_4B71_A0C7_55DA931643A4
+#if !defined(TSB_E5042A14_CF76_4BDC_A563_739E3F3C212E)
+#define TSB_E5042A14_CF76_4BDC_A563_739E3F3C212E
 
 #include <omp.h>
 
@@ -32,10 +32,11 @@ struct rolling_matrix
 
   public:
     void resize(
-        size_type array_base_align
+        size_type tw
+      , size_type array_base_align
       , size_type array_align_step
       , size_type plane_pad
-      , size_type twx, size_type twy, size_type nz
+      , size_type nx, size_type ny, size_type nz
         ) noexcept
     {
         a_.resize(::omp_get_max_threads());
@@ -47,21 +48,21 @@ struct rolling_matrix
         // the padding math.
         for (auto tn = 0; tn < ::omp_get_max_threads(); ++tn)
         {
-            a_.resize(
+            a_[tn].resize(
                 array_base_align + 1 * array_align_step
-              , nx, ny, nz
+              , nx, tw, nz
               , 0, plane_pad, 0
             );
 
-            b_.resize(
+            b_[tn].resize(
                 array_base_align + 2 * array_align_step
-              , nx, ny, nz
+              , nx, tw, nz
               , 0, plane_pad, 0
             );
 
-            c_.resize(
+            c_[tn].resize(
                 array_base_align + 3 * array_align_step
-              , nx, ny, nz
+              , nx, tw, nz
               , 0, plane_pad, 0
             );
         }
@@ -121,5 +122,5 @@ struct rolling_matrix
 
 } // tsb
 
-#endif // TSB_E5D6612B_CFD5_4B71_A0C7_55DA931643A4
+#endif // TSB_E5042A14_CF76_4BDC_A563_739E3F3C212E
 

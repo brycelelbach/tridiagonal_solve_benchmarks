@@ -28,7 +28,8 @@ struct full_matrix
 
   public:
     void resize(
-        size_type array_base_align
+        size_type tw
+      , size_type array_base_align
       , size_type array_align_step
       , size_type plane_pad
       , size_type nx, size_type ny, size_type nz
