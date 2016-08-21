@@ -40,6 +40,8 @@
 
 #warning Do chunking for step()'s parallel for manually and go back to per-thread timing
 
+#warning Lift build_matrix and combine *_rolling_matrix and *_full_matrix solver base classes
+
 namespace tsb {
 
 template <typename T>
@@ -110,13 +112,13 @@ struct heat_equation_btcs : enable_fp_exceptions
         // align_policy.
         auto constexpr ap = solver_traits<Derived>::align_policy;
 
-        auto const array_base_align_ = ( ap | use_array_base_align
+        auto const array_base_align_ = ( ap & use_array_base_align
                                        ? array_base_align
                                        : 64);
-        auto const array_align_step_ = ( ap | use_array_align_step
+        auto const array_align_step_ = ( ap & use_array_align_step
                                        ? array_align_step
                                        : 0);
-        auto const plane_pad_        = ( ap | use_plane_pad
+        auto const plane_pad_        = ( ap & use_plane_pad
                                        ? plane_pad
                                        : 0);
 
@@ -125,7 +127,7 @@ struct heat_equation_btcs : enable_fp_exceptions
 
         // Allocate storage for the matrix.
         A.resize(
-            array_base_align_, array_align_step_, plane_pad_
+            tw, array_base_align_, array_align_step_, plane_pad_
           , nx, ny, nz
         );
 
@@ -196,6 +198,11 @@ struct heat_equation_btcs : enable_fp_exceptions
         allocate_arrays();
 
         derived().initialize();
+
+        set_initial_conditions(
+            tw, u
+          , [=] (size_type k) noexcept { return initial_conditions(k); }
+        );
 
         timer t;
 
@@ -342,13 +349,6 @@ struct heat_equation_btcs_full_matrix
     {
         build_matrix(
             this->tw, this->A_coef, this->A.a(), this->A.b(), this->A.c()
-        );
-
-        #warning We may be able to lift the set_initial_conditions() call
-        set_initial_conditions(
-            this->tw, this->u
-          , [=] (size_type k) noexcept
-            { return this->initial_conditions(k); }
         );
     }
 
@@ -589,6 +589,131 @@ struct solver_traits<
     using timer = Timer; 
 
     static align_policy_enum constexpr align_policy = use_all_align_policies;
+};
+
+///////////////////////////////////////////////////////////////////////////////
+
+template <typename Derived>
+struct heat_equation_btcs_rolling_matrix
+  : heat_equation_btcs<
+        heat_equation_btcs_rolling_matrix<Derived>
+    >
+{
+    using base_type = heat_equation_btcs<
+        heat_equation_btcs_rolling_matrix<Derived>
+    >;
+
+    using size_type  = typename base_type::size_type;
+    using value_type = typename base_type::value_type;
+
+  private:
+    Derived& derived() noexcept
+    {
+        return *static_cast<Derived*>(this);
+    }
+
+    Derived const& derived() const noexcept
+    {
+        return *static_cast<Derived const*>(this);
+    }
+
+  public:
+    void initialize() noexcept
+    {
+        for (auto tn = 0; tn < ::omp_get_max_threads(); ++tn)
+        {
+            build_matrix_tile(
+                0, this->tw, this->A_coef
+              , this->A.a(tn), this->A.b(tn), this->A.c(tn)
+            );
+        }
+    }
+
+    void step(size_type s) noexcept
+    {
+        derived().step(s);
+    }
+
+    void post_step(size_type s) noexcept
+    {
+        for (auto tn = 0; tn < ::omp_get_max_threads(); ++tn)
+        {
+            build_matrix_tile(
+                0, this->tw, this->A_coef
+              , this->A.a(tn), this->A.b(tn), this->A.c(tn)
+            );
+        }
+    }
+
+    static std::string name() noexcept
+    {
+        return Derived::name();
+    }
+};
+
+///////////////////////////////////////////////////////////////////////////////
+
+template <
+    typename T
+  , typename Timer = high_resolution_timer
+    >
+struct heat_equation_btcs_mkl_z_contiguous_rolling_matrix
+  : heat_equation_btcs_rolling_matrix<
+        heat_equation_btcs_mkl_z_contiguous_rolling_matrix<
+            T, Timer
+        >
+    >
+{
+    using base_type = heat_equation_btcs_rolling_matrix<
+        heat_equation_btcs_mkl_z_contiguous_rolling_matrix<
+            T, Timer
+        >
+    >;
+
+    using size_type  = typename base_type::size_type;
+    using value_type = typename base_type::value_type;
+
+    void step(size_type s) noexcept
+    {
+        #pragma omp parallel for schedule(static)
+        for (int j = 0; j < this->ny; j += this->tw)
+        {
+            auto const j_begin = j;
+            auto const j_end   = j + this->tw;
+
+            auto const tn = ::omp_get_thread_num();
+
+            using namespace tsb::mkl;
+
+            solve(
+                0, this->tw, j_begin, j_end
+              , this->A.a(tn), this->A.b(tn), this->A.c(tn), this->u
+            );
+        }
+    }
+
+    static std::string name() noexcept
+    {
+        return "MKL.Z-CONTIGUOUS.ROLLING-MATRIX"; 
+    }
+};
+
+template <
+    typename T
+  , typename Timer
+    >
+struct solver_traits<
+    heat_equation_btcs_rolling_matrix<
+        heat_equation_btcs_mkl_z_contiguous_rolling_matrix<
+            T, Timer
+        >
+    >
+> {
+    using matrix = rolling_matrix<T, layout_right>;
+
+    using timer = Timer; 
+
+    static align_policy_enum constexpr align_policy = use_no_align_policies;
 };
 
 } // tsb
