@@ -91,8 +91,6 @@ inline aligned_array_ptr<T> make_aligned_array_posix_memalign(
 
     TSB_ASSUME_ALIGNED(p, 2 * sizeof(void*));
 
-    std::memset(p, 0, size * sizeof(T));
-
     return aligned_array_ptr<T>(
         alignment, size, reinterpret_cast<T*>(p), reinterpret_cast<T*>(p)
     );
@@ -113,8 +111,6 @@ inline aligned_array_ptr<T> make_aligned_array_overallocate(
     TSB_ASSUME(ap);
 
     TSB_ASSUME_ALIGNED(ap, 2 * sizeof(void*));
-
-    std::memset(ap, 0, size * sizeof(T));
 
     return aligned_array_ptr<T>(
         alignment, size, reinterpret_cast<T*>(p), reinterpret_cast<T*>(ap)
