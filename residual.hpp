@@ -28,25 +28,25 @@ inline void residual(
   , array3d<T, layout_left> const& u // Solution
     ) noexcept
 {
-    auto const nx = r.nx();
-    auto const nz = r.nz();
+    auto const nx = b.nx();
+    auto const nz = b.nz();
 
     TSB_ASSUME(0 == (nx % 16)); // Assume unit stride is divisible by 16.
 
     TSB_ASSUME(r.nx() == a.nx());
-    TSB_ASSUME(r.ny() == a.ny());
+    //TSB_ASSUME(r.ny() == a.ny());
     TSB_ASSUME(r.nz() == a.nz());
 
     TSB_ASSUME(r.nx() == b.nx());
-    TSB_ASSUME(r.ny() == b.ny());
+    //TSB_ASSUME(r.ny() == b.ny());
     TSB_ASSUME(r.nz() == b.nz());
 
     TSB_ASSUME(r.nx() == c.nx());
-    TSB_ASSUME(r.ny() == c.ny());
+    //TSB_ASSUME(r.ny() == c.ny());
     TSB_ASSUME(r.nz() == c.nz());
 
     TSB_ASSUME(r.nx() == u.nx());
-    TSB_ASSUME(r.ny() == u.ny());
+    //TSB_ASSUME(r.ny() == u.ny());
     TSB_ASSUME(r.nz() == u.nz());
 
     // First row.
@@ -185,19 +185,19 @@ inline void residual(
     TSB_ASSUME(0 == (nz % 16)); // Assume unit stride is divisible by 16.
 
     TSB_ASSUME(r.nx() == a.nx());
-    TSB_ASSUME(r.ny() == a.ny());
+    //TSB_ASSUME(r.ny() == a.ny());
     TSB_ASSUME(r.nz() == a.nz());
 
     TSB_ASSUME(r.nx() == b.nx());
-    TSB_ASSUME(r.ny() == b.ny());
+    //TSB_ASSUME(r.ny() == b.ny());
     TSB_ASSUME(r.nz() == b.nz());
 
     TSB_ASSUME(r.nx() == c.nx());
-    TSB_ASSUME(r.ny() == c.ny());
+    //TSB_ASSUME(r.ny() == c.ny());
     TSB_ASSUME(r.nz() == c.nz());
 
     TSB_ASSUME(r.nx() == u.nx());
-    TSB_ASSUME(r.ny() == u.ny());
+    //TSB_ASSUME(r.ny() == u.ny());
     TSB_ASSUME(r.nz() == u.nz());
 
     // First row.

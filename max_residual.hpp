@@ -29,8 +29,8 @@ inline T max_residual(
   , array3d<T, layout_left> const& u // Solution
     ) noexcept
 {
-    auto const nx = u.nx();
-    auto const nz = u.nz();
+    auto const nx = b.nx();
+    auto const nz = b.nz();
 
     residual(j_begin, j_end, r, a, b, c, u);
 
@@ -83,7 +83,7 @@ inline T max_residual(
   , array3d<T, layout_left> const& u // Solution
     ) noexcept
 {
-    return max_residual(0, r.ny(), r, a, b, c, u);
+    return max_residual(0, b.ny(), r, a, b, c, u);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -99,10 +99,10 @@ inline T max_residual(
   , array3d<T, layout_right> const& u // Solution
     ) noexcept
 {
-    auto const nx = u.nx();
-    auto const nz = u.nz();
+    auto const nx = b.nx();
+    auto const nz = b.nz();
 
-    residual(r, a, b, c, u);
+    residual(j_begin, j_end, r, a, b, c, u);
 
     T mr = 0.0; 
 
@@ -148,7 +148,7 @@ inline T max_residual(
   , array3d<T, layout_right> const& u // Solution
     ) noexcept
 {
-    return max_residual(0, r.ny(), r, a, b, c, u);
+    return max_residual(0, b.ny(), r, a, b, c, u);
 }
 
 } // tsb
