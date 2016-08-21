@@ -12,7 +12,8 @@
 #include "array3d.hpp"
 #include "fp_equals.hpp"
 
-namespace tsb {
+namespace tsb
+{
 
 // residual(r, A, u): r = A * u - r
 

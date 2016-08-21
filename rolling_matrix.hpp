@@ -15,7 +15,8 @@
 #include "assume.hpp"
 #include "array3d.hpp"
 
-namespace tsb {
+namespace tsb
+{
 
 template <typename T, typename Layout>
 struct rolling_matrix

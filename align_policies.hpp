@@ -10,7 +10,8 @@
 
 #include "binary_literals.hpp"
 
-namespace tsb {
+namespace tsb
+{
 
 enum align_policy_enum
 {

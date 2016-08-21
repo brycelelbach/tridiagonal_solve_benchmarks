@@ -18,7 +18,8 @@
 
 #include "assume.hpp"
 
-namespace tsb {
+namespace tsb
+{
 
 template <typename T>
 inline constexpr typename std::enable_if<

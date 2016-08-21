@@ -15,7 +15,8 @@
 #include <iostream>
 #include <limits>
 
-namespace tsb {
+namespace tsb
+{
 
 template <typename T>
 T get_env_variable(std::string const& var, T default_); 

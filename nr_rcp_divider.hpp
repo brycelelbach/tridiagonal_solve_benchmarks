@@ -16,7 +16,8 @@
 #include "always_inline.hpp"
 #include "convert_to_string.hpp"
 
-namespace tsb {
+namespace tsb
+{
 
 // Newton-Raphson division estimation using fast reciprocal (RCP) instructions.
 // The RCPPrecision parameter specifies the precision of the RCP instruction

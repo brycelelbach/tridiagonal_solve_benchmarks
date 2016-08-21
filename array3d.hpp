@@ -12,7 +12,8 @@
 
 #include "make_aligned_array.hpp"
 
-namespace tsb {
+namespace tsb
+{
 
 struct placeholder {};
 

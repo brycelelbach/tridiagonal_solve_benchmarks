@@ -11,7 +11,8 @@
 
 #include <cstdint>
 
-namespace tsb {
+namespace tsb
+{
 
 template <std::uintmax_t N>
 struct binary_literal

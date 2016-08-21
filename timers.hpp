@@ -12,7 +12,8 @@
 
 #include <cstdint>
 
-namespace tsb {
+namespace tsb
+{
 
 struct high_resolution_timer
 {

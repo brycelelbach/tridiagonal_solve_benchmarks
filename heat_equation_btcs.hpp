@@ -36,13 +36,12 @@
 #include "nr_rcp_divider.hpp"
 #include "align_policies.hpp"
 
-#warning Lift name() to solver_traits?
-
 #warning Do chunking for step()'s parallel for manually and go back to per-thread timing
 
 #warning Lift build_matrix and combine *_rolling_matrix and *_full_matrix solver base classes
 
-namespace tsb {
+namespace tsb
+{
 
 template <typename T>
 struct solver_traits;

@@ -12,7 +12,8 @@
 
 #include "always_inline.hpp"
 
-namespace tsb {
+namespace tsb
+{
 
 // Division via C++ operator. The compiler will optimize this to RCP operations
 // when possible on platforms which have an RCP instruction for the given type.
