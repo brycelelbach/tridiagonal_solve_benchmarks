@@ -21,6 +21,73 @@ namespace tsb { namespace mkl
 
 template <typename T>
 inline void solve(
+    typename array3d<T, layout_right>::size_type jA_begin
+  , typename array3d<T, layout_right>::size_type jA_end
+  , typename array3d<T, layout_right>::size_type ju_begin
+  , typename array3d<T, layout_right>::size_type ju_end
+  , array3d<T, layout_right>& a                 // Lower band.
+  , array3d<T, layout_right>& b                 // Diagonal.
+  , array3d<T, layout_right>& c                 // Upper band.
+  , array3d<T, layout_right>& u                 // Solution.
+    ) noexcept TSB_ALWAYS_INLINE;
+
+template <typename T>
+inline void solve(
+    typename array3d<T, layout_right>::size_type jA_begin
+  , typename array3d<T, layout_right>::size_type jA_end
+  , typename array3d<T, layout_right>::size_type ju_begin
+  , typename array3d<T, layout_right>::size_type ju_end
+  , array3d<T, layout_right>& a                 // Lower band.
+  , array3d<T, layout_right>& b                 // Diagonal.
+  , array3d<T, layout_right>& c                 // Upper band.
+  , array3d<T, layout_right>& u                 // Solution.
+    ) noexcept
+{
+    auto const nx = u.nx();
+    auto const nz = u.nz();
+
+    TSB_ASSUME(0 == (nz % 16)); // Assume unit stride is divisible by 16.
+
+    TSB_ASSUME(u.nx() == a.nx());
+    TSB_ASSUME(u.nz() == a.nz());
+
+    TSB_ASSUME(u.nx() == b.nx());
+    TSB_ASSUME(u.nz() == b.nz());
+
+    TSB_ASSUME(u.nx() == c.nx());
+    TSB_ASSUME(u.nz() == c.nz());
+
+    TSB_ASSUME((jA_end - jA_begin) == (ju_end - ju_begin));
+
+    for (auto i = 0; i < nx; ++i)
+        for ( typename array3d<T, layout_right>::size_type jA = jA_begin
+                                                         , ju = ju_begin
+            ; jA < jA_end
+            ; ++jA, ++ju
+            )
+        {
+            T* __restrict__ ap = a(i, jA, _);
+
+            T* __restrict__ bp = b(i, jA, _);
+
+            T* __restrict__ cp = c(i, jA, _);
+
+            T* __restrict__ up = u(i, ju, _);
+
+            TSB_ASSUME_ALIGNED(ap, 64);
+
+            TSB_ASSUME_ALIGNED(bp, 64);
+
+            TSB_ASSUME_ALIGNED(cp, 64);
+
+            TSB_ASSUME_ALIGNED(up, 64);
+
+            gtsv(nz, 1, ap, bp, cp, up, nz);
+        }
+}
+
+template <typename T>
+inline void solve(
     typename array3d<T, layout_right>::size_type j_begin
   , typename array3d<T, layout_right>::size_type j_end
   , array3d<T, layout_right>& a                 // Lower band.
@@ -39,44 +106,7 @@ inline void solve(
   , array3d<T, layout_right>& u                 // Solution.
     ) noexcept
 {
-    auto const nx = u.nx();
-    auto const nz = u.nz();
-
-    TSB_ASSUME(0 == (nz % 16)); // Assume unit stride is divisible by 16.
-
-    TSB_ASSUME(u.nx() == a.nx());
-    TSB_ASSUME(u.ny() == a.ny());
-    TSB_ASSUME(u.nz() == a.nz());
-
-    TSB_ASSUME(u.nx() == b.nx());
-    TSB_ASSUME(u.ny() == b.ny());
-    TSB_ASSUME(u.nz() == b.nz());
-
-    TSB_ASSUME(u.nx() == c.nx());
-    TSB_ASSUME(u.ny() == c.ny());
-    TSB_ASSUME(u.nz() == c.nz());
-
-    for (auto i = 0; i < nx; ++i)
-        for (auto j = j_begin; j < j_end; ++j)
-        {
-            T* __restrict__ ap = a(i, j, _);
-
-            T* __restrict__ bp = b(i, j, _);
-
-            T* __restrict__ cp = c(i, j, _);
-
-            T* __restrict__ up = u(i, j, _);
-
-            TSB_ASSUME_ALIGNED(ap, 64);
-
-            TSB_ASSUME_ALIGNED(bp, 64);
-
-            TSB_ASSUME_ALIGNED(cp, 64);
-
-            TSB_ASSUME_ALIGNED(up, 64);
-
-            gtsv(nz, 1, ap, bp, cp, up, nz);          
-        }
+    solve(j_begin, j_end, j_begin, j_end, a, b, c, u);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
