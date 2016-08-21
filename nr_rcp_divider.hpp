@@ -14,10 +14,9 @@
 #include <type_traits>
 
 #include "always_inline.hpp"
+#include "convert_to_string.hpp"
 
 namespace tsb {
-
-///////////////////////////////////////////////////////////////////////////////
 
 // Newton-Raphson division estimation using fast reciprocal (RCP) instructions.
 // The RCPPrecision parameter specifies the precision of the RCP instruction
@@ -44,7 +43,8 @@ struct nr_rcp_divider
 
     static std::string name() noexcept
     {
-        return std::string("NR-")
+        return std::string("NR")
+             + convert_to_string(NRIterations) + "-"
              + ( std::is_same<RCPPrecision, double>::value
                ? "RCPPD-"
                : "RCPPS-")
