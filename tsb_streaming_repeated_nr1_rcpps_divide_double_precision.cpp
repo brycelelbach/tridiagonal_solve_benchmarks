@@ -11,7 +11,7 @@ int main()
 {
     tsb::heat_equation_btcs_streaming_repeated_divide<
         double
-      , tsb::nr_rcp_divider<double, float>
+      , tsb::nr_rcp_divider<double, float, 1>
     > s;
 
     s.run();
