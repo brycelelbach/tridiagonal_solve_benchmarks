@@ -24,7 +24,7 @@ inline void pre_elimination_tile(
     typename array3d<T, layout_left>::size_type j_begin
   , typename array3d<T, layout_left>::size_type j_end
   , array3d<T, layout_left>& b                 // Diagonal.
-  , F f
+  , F&& f
     ) noexcept TSB_ALWAYS_INLINE;
 
 template <typename T, typename F>
@@ -32,7 +32,7 @@ inline void pre_elimination_tile(
     typename array3d<T, layout_left>::size_type j_begin
   , typename array3d<T, layout_left>::size_type j_end
   , array3d<T, layout_left>& b                 // Diagonal.
-  , F f
+  , F&& f
     ) noexcept
 {
     auto const nx = b.nx();
@@ -54,26 +54,32 @@ inline void pre_elimination_tile(
     }
 }
 
+///////////////////////////////////////////////////////////////////////////////
+
 template <typename T, typename F>
 inline void forward_elimination_tile(
-    typename array3d<T, layout_left>::size_type j_begin
-  , typename array3d<T, layout_left>::size_type j_end
+    typename array3d<T, layout_left>::size_type jA_begin
+  , typename array3d<T, layout_left>::size_type jA_end
+  , typename array3d<T, layout_left>::size_type ju_begin
+  , typename array3d<T, layout_left>::size_type ju_end
   , array3d<T, layout_left> const& a           // Lower band.
   , array3d<T, layout_left>& b                 // Diagonal.
   , array3d<T, layout_left> const& c           // Upper band.
   , array3d<T, layout_left>& u                 // Solution.
-  , F f
+  , F&& f
     ) noexcept TSB_ALWAYS_INLINE;
 
 template <typename T, typename F>
 inline void forward_elimination_tile(
-    typename array3d<T, layout_left>::size_type j_begin
-  , typename array3d<T, layout_left>::size_type j_end
+    typename array3d<T, layout_left>::size_type jA_begin
+  , typename array3d<T, layout_left>::size_type jA_end
+  , typename array3d<T, layout_left>::size_type ju_begin
+  , typename array3d<T, layout_left>::size_type ju_end
   , array3d<T, layout_left> const& a           // Lower band.
   , array3d<T, layout_left>& b                 // Diagonal.
   , array3d<T, layout_left> const& c           // Upper band.
   , array3d<T, layout_left>& u                 // Solution.
-  , F f
+  , F&& f
     ) noexcept
 {
     auto const nx = u.nx();
@@ -92,17 +98,21 @@ inline void forward_elimination_tile(
 
     // Forward Elimination: (nz - 1) * (j_end - j_begin) * (nx) iterations
     for (auto k = 1; k < nz; ++k)
-        for (auto j = j_begin; j < j_end; ++j)
+        for ( typename array3d<T, layout_left>::size_type jA = jA_begin
+                                                        , ju = ju_begin
+            ; jA < jA_end
+            ; ++jA, ++ju
+            )
         {
-            T const* __restrict__ asub1p = a(_, j, k - 1);
+            T const* __restrict__ asub1p = a(_, jA, k - 1);
 
-            T const* __restrict__ bsub1p = b(_, j, k - 1);
-            T* __restrict__       bp     = b(_, j, k);
+            T const* __restrict__ bsub1p = b(_, jA, k - 1);
+            T* __restrict__       bp     = b(_, jA, k);
 
-            T const* __restrict__ csub1p = c(_, j, k - 1);
+            T const* __restrict__ csub1p = c(_, jA, k - 1);
 
-            T const* __restrict__ usub1p = u(_, j, k - 1);
-            T* __restrict__       up     = u(_, j, k);
+            T const* __restrict__ usub1p = u(_, ju, k - 1);
+            T* __restrict__       up     = u(_, ju, k);
 
             TSB_ASSUME_ALIGNED(asub1p, 64);
 
@@ -123,21 +133,54 @@ inline void forward_elimination_tile(
 }
 
 template <typename T, typename F>
-inline void pre_substitution_tile(
+inline void forward_elimination_tile(
     typename array3d<T, layout_left>::size_type j_begin
   , typename array3d<T, layout_left>::size_type j_end
+  , array3d<T, layout_left> const& a           // Lower band.
+  , array3d<T, layout_left>& b                 // Diagonal.
+  , array3d<T, layout_left> const& c           // Upper band.
+  , array3d<T, layout_left>& u                 // Solution.
+  , F&& f
+    ) noexcept TSB_ALWAYS_INLINE;
+
+template <typename T, typename F>
+inline void forward_elimination_tile(
+    typename array3d<T, layout_left>::size_type j_begin
+  , typename array3d<T, layout_left>::size_type j_end
+  , array3d<T, layout_left> const& a           // Lower band.
+  , array3d<T, layout_left>& b                 // Diagonal.
+  , array3d<T, layout_left> const& c           // Upper band.
+  , array3d<T, layout_left>& u                 // Solution.
+  , F&& f
+    ) noexcept
+{
+    forward_elimination_tile(
+        j_begin, j_end, j_begin, j_end, a, b, c, u, std::forward<F>(f)
+    );
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+template <typename T, typename F>
+inline void pre_substitution_tile(
+    typename array3d<T, layout_left>::size_type jA_begin
+  , typename array3d<T, layout_left>::size_type jA_end
+  , typename array3d<T, layout_left>::size_type ju_begin
+  , typename array3d<T, layout_left>::size_type ju_end
   , array3d<T, layout_left> const& b           // Diagonal.
   , array3d<T, layout_left>& u                 // Solution.
-  , F f
+  , F&& f
     ) noexcept TSB_ALWAYS_INLINE;
 
 template <typename T, typename F>
 inline void pre_substitution_tile(
-    typename array3d<T, layout_left>::size_type j_begin
-  , typename array3d<T, layout_left>::size_type j_end
+    typename array3d<T, layout_left>::size_type jA_begin
+  , typename array3d<T, layout_left>::size_type jA_end
+  , typename array3d<T, layout_left>::size_type ju_begin
+  , typename array3d<T, layout_left>::size_type ju_end
   , array3d<T, layout_left> const& b           // Diagonal.
   , array3d<T, layout_left>& u                 // Solution.
-  , F f
+  , F&& f
     ) noexcept
 {
     auto const nx = u.nx();
@@ -149,11 +192,15 @@ inline void pre_substitution_tile(
     TSB_ASSUME(u.nz() == b.nz());
 
     // Pre-Substitution: (j_end - j_begin) * (nx) iterations
-    for (auto j = j_begin; j < j_end; ++j)
+    for ( typename array3d<T, layout_left>::size_type jA = jA_begin
+                                                    , ju = ju_begin
+        ; jA < jA_end
+        ; ++jA, ++ju
+        )
     {
-        T const* __restrict__ bendp = b(_, j, nz - 1);
+        T const* __restrict__ bendp = b(_, jA, nz - 1);
 
-        T* __restrict__       uendp = u(_, j, nz - 1);
+        T* __restrict__       uendp = u(_, ju, nz - 1);
 
         TSB_ASSUME_ALIGNED(bendp, 64);
 
@@ -168,23 +215,52 @@ inline void pre_substitution_tile(
 }
 
 template <typename T, typename F>
-inline void back_substitution_tile(
+inline void pre_substitution_tile(
     typename array3d<T, layout_left>::size_type j_begin
   , typename array3d<T, layout_left>::size_type j_end
   , array3d<T, layout_left> const& b           // Diagonal.
+  , array3d<T, layout_left>& u                 // Solution.
+  , F&& f
+    ) noexcept TSB_ALWAYS_INLINE;
+
+template <typename T, typename F>
+inline void pre_substitution_tile(
+    typename array3d<T, layout_left>::size_type j_begin
+  , typename array3d<T, layout_left>::size_type j_end
+  , array3d<T, layout_left> const& b           // Diagonal.
+  , array3d<T, layout_left>& u                 // Solution.
+  , F&& f
+    ) noexcept
+{
+    pre_substitution_tile(
+        j_begin, j_end, j_begin, j_end, b, u, std::forward<F>(f)
+    );
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+template <typename T, typename F>
+inline void back_substitution_tile(
+    typename array3d<T, layout_left>::size_type jA_begin
+  , typename array3d<T, layout_left>::size_type jA_end
+  , typename array3d<T, layout_left>::size_type ju_begin
+  , typename array3d<T, layout_left>::size_type ju_end
+  , array3d<T, layout_left> const& b           // Diagonal.
   , array3d<T, layout_left> const& c           // Upper band.
   , array3d<T, layout_left>& u                 // Solution.
-  , F f
+  , F&& f
     ) noexcept TSB_ALWAYS_INLINE;
 
 template <typename T, typename F>
 inline void back_substitution_tile(
-    typename array3d<T, layout_left>::size_type j_begin
-  , typename array3d<T, layout_left>::size_type j_end
+    typename array3d<T, layout_left>::size_type jA_begin
+  , typename array3d<T, layout_left>::size_type jA_end
+  , typename array3d<T, layout_left>::size_type ju_begin
+  , typename array3d<T, layout_left>::size_type ju_end
   , array3d<T, layout_left> const& b           // Diagonal.
   , array3d<T, layout_left> const& c           // Upper band.
   , array3d<T, layout_left>& u                 // Solution.
-  , F f
+  , F&& f
     ) noexcept
 {
     auto const nx = u.nx();
@@ -200,14 +276,18 @@ inline void back_substitution_tile(
  
     // Back Substitution: (nz - 1) * (j_end - j_begin) * (nx) iterations
     for (auto k = nz - 2; k >= 0; --k)
-        for (auto j = j_begin; j < j_end; ++j)
+        for ( typename array3d<T, layout_left>::size_type jA = jA_begin
+                                                        , ju = ju_begin
+            ; jA < jA_end
+            ; ++jA, ++ju
+            )
         {
-            T const* __restrict__ bp     = b(_, j, k);
+            T const* __restrict__ bp     = b(_, jA, k);
 
-            T const* __restrict__ cp     = c(_, j, k);
+            T const* __restrict__ cp     = c(_, jA, k);
 
-            T* __restrict__       up     = u(_, j, k);
-            T const* __restrict__ uadd1p = u(_, j, k + 1);
+            T* __restrict__       up     = u(_, ju, k);
+            T const* __restrict__ uadd1p = u(_, ju, k + 1);
 
             TSB_ASSUME_ALIGNED(bp, 64);
 
@@ -222,6 +302,31 @@ inline void back_substitution_tile(
                 f(bp[i], cp[i], up[i], uadd1p[i]);
             }
         }
+}
+
+template <typename T, typename F>
+inline void back_substitution_tile(
+    typename array3d<T, layout_left>::size_type j_begin
+  , typename array3d<T, layout_left>::size_type j_end
+  , array3d<T, layout_left> const& b           // Diagonal.
+  , array3d<T, layout_left> const& c           // Upper band.
+  , array3d<T, layout_left>& u                 // Solution.
+  , F&& f
+    ) noexcept TSB_ALWAYS_INLINE;
+
+template <typename T, typename F>
+inline void back_substitution_tile(
+    typename array3d<T, layout_left>::size_type j_begin
+  , typename array3d<T, layout_left>::size_type j_end
+  , array3d<T, layout_left> const& b           // Diagonal.
+  , array3d<T, layout_left> const& c           // Upper band.
+  , array3d<T, layout_left>& u                 // Solution.
+  , F&& f
+    ) noexcept
+{
+    back_substitution_tile(
+        j_begin, j_end, j_begin, j_end, b, c, u, std::forward<F>(f)
+    );
 }
 
 ///////////////////////////////////////////////////////////////////////////////
