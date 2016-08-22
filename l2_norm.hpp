@@ -20,8 +20,11 @@ namespace tsb
 ///////////////////////////////////////////////////////////////////////////////
 
 template <typename T, typename Exact>
-inline T l2_norm(array3d<T, layout_left> const& u, Exact&& exact) noexcept
-{
+inline T l2_norm(
+    array3d<T, layout_left> const& u
+  , Exact&& exact
+    ) noexcept
+{ // {{{
     auto const nx = u.nx();
     auto const ny = u.ny();
     auto const nz = u.nz();
@@ -63,13 +66,16 @@ inline T l2_norm(array3d<T, layout_left> const& u, Exact&& exact) noexcept
         }
 
     return l2;
-}
+} // }}}
 
 ///////////////////////////////////////////////////////////////////////////////
 
 template <typename T, typename Exact>
-inline T l2_norm(array3d<T, layout_right> const& u, Exact&& exact) noexcept
-{
+inline T l2_norm(
+    array3d<T, layout_right> const& u
+  , Exact&& exact
+    ) noexcept
+{ // {{{
     auto const nx = u.nx();
     auto const ny = u.ny();
     auto const nz = u.nz();
@@ -106,7 +112,7 @@ inline T l2_norm(array3d<T, layout_right> const& u, Exact&& exact) noexcept
         }
 
     return l2;
-}
+} // }}}
 
 } // tsb
 

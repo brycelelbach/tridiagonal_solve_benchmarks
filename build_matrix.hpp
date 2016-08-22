@@ -9,12 +9,55 @@
 #define TSB_4D7778C5_461A_412C_81EA_40CA5280ABB5
 
 #include "assume.hpp"
+#include "always_inline.hpp"
 #include "array3d.hpp"
 
 namespace tsb
 {
 
 ///////////////////////////////////////////////////////////////////////////////
+
+template <typename T, typename Layout>
+inline void build_matrix(
+    typename array3d<T, Layout>::size_type tw
+  , T A_coef
+  , array3d<T, Layout>& a // Lower band
+  , array3d<T, Layout>& b // Diagonal
+  , array3d<T, Layout>& c // Upper band
+    ) noexcept TSB_ALWAYS_INLINE;
+
+template <typename T, typename Layout>
+inline void build_matrix(
+    typename array3d<T, Layout>::size_type tw
+  , T A_coef
+  , array3d<T, Layout>& a // Lower band
+  , array3d<T, Layout>& b // Diagonal
+  , array3d<T, Layout>& c // Upper band
+    ) noexcept
+{ // {{{
+    auto const ny = b.ny();
+
+    #pragma omp parallel for schedule(static) 
+    for (auto j = 0; j < ny; j += tw)
+    {
+        auto const j_begin = j;
+        auto const j_end   = j + tw;
+
+        build_matrix_tile(j_begin, j_end, A_coef, a, b, c);
+    }
+} // }}}
+
+///////////////////////////////////////////////////////////////////////////////
+
+template <typename T>
+inline void build_matrix_tile(
+    typename array3d<T, layout_left>::size_type j_begin
+  , typename array3d<T, layout_left>::size_type j_end
+  , T A_coef
+  , array3d<T, layout_left>& a // Lower band
+  , array3d<T, layout_left>& b // Diagonal
+  , array3d<T, layout_left>& c // Upper band
+    ) noexcept TSB_ALWAYS_INLINE;
 
 template <typename T>
 inline void build_matrix_tile(
@@ -87,28 +130,17 @@ inline void build_matrix_tile(
     }
 } // }}}
 
-template <typename T>
-inline void build_matrix(
-    typename array3d<T, layout_left>::size_type tw
-  , T A_coef
-  , array3d<T, layout_left>& a // Lower band
-  , array3d<T, layout_left>& b // Diagonal
-  , array3d<T, layout_left>& c // Upper band
-    ) noexcept
-{ // {{{
-    auto const ny = b.ny();
-
-    #pragma omp parallel for schedule(static) 
-    for (auto j = 0; j < ny; j += tw)
-    {
-        auto const j_begin = j;
-        auto const j_end   = j + tw;
-
-        build_matrix_tile(j_begin, j_end, A_coef, a, b, c);
-    }
-} // }}}
-
 ///////////////////////////////////////////////////////////////////////////////
+
+template <typename T>
+inline void build_matrix_tile(
+    typename array3d<T, layout_right>::size_type j_begin
+  , typename array3d<T, layout_right>::size_type j_end
+  , T A_coef
+  , array3d<T, layout_right>& a // Lower band
+  , array3d<T, layout_right>& b // Diagonal
+  , array3d<T, layout_right>& c // Upper band
+    ) noexcept TSB_ALWAYS_INLINE;
 
 template <typename T>
 inline void build_matrix_tile(
@@ -181,27 +213,6 @@ inline void build_matrix_tile(
             bbeginp[jbs] = 1.0; cbeginp[jacs] = 0.0;
             aendp[jacs]  = 0.0; bendp[jbs]    = 1.0;
         }
-    }
-} // }}}
-
-template <typename T>
-inline void build_matrix(
-    typename array3d<T, layout_right>::size_type tw
-  , T A_coef
-  , array3d<T, layout_right>& a // Lower band
-  , array3d<T, layout_right>& b // Diagonal
-  , array3d<T, layout_right>& c // Upper band
-    ) noexcept
-{ // {{{
-    auto const ny = b.ny();
-
-    #pragma omp parallel for schedule(static) 
-    for (auto j = 0; j < ny; j += tw)
-    {
-        auto const j_begin = j;
-        auto const j_end   = j + tw;
-
-        build_matrix_tile(j_begin, j_end, A_coef, a, b, c);
     }
 } // }}}
 

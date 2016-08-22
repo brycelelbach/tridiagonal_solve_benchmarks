@@ -9,6 +9,7 @@
 #define TSB_E343F9D4_3FF8_4928_8F22_A6720FC1BD34
 
 #include "assume.hpp"
+#include "always_inline.hpp"
 #include "array3d.hpp"
 
 namespace tsb
@@ -17,6 +18,42 @@ namespace tsb
 // copy(dest, src): dest = src 
 
 ///////////////////////////////////////////////////////////////////////////////
+
+template <typename T, typename Layout>
+inline void copy(
+    typename array3d<T, Layout>::size_type tw
+  , array3d<T, Layout>& dest
+  , array3d<T, Layout> const& src
+    ) noexcept TSB_ALWAYS_INLINE;
+
+template <typename T, typename Layout>
+inline void copy(
+    typename array3d<T, Layout>::size_type tw
+  , array3d<T, Layout>& dest
+  , array3d<T, Layout> const& src
+    ) noexcept
+{ // {{{
+    auto const ny = src.ny();
+
+    #pragma omp parallel for schedule(static) 
+    for (auto j = 0; j < ny; j += tw)
+    {
+        auto const j_begin = j;
+        auto const j_end   = j + tw;
+
+        copy_tile(j_begin, j_end, dest, src);
+    }
+} // }}}
+
+///////////////////////////////////////////////////////////////////////////////
+
+template <typename T>
+inline void copy_tile(
+    typename array3d<T, layout_left>::size_type j_begin
+  , typename array3d<T, layout_left>::size_type j_end
+  , array3d<T, layout_left>& dest
+  , array3d<T, layout_left> const& src
+    ) noexcept TSB_ALWAYS_INLINE;
 
 template <typename T>
 inline void copy_tile(
@@ -50,26 +87,15 @@ inline void copy_tile(
         }
 } // }}}
 
-template <typename T>
-inline void copy(
-    typename array3d<T, layout_left>::size_type tw
-  , array3d<T, layout_left>& dest
-  , array3d<T, layout_left> const& src
-    ) noexcept
-{ // {{{
-    auto const ny = src.ny();
-
-    #pragma omp parallel for schedule(static) 
-    for (auto j = 0; j < ny; j += tw)
-    {
-        auto const j_begin = j;
-        auto const j_end   = j + tw;
-
-        copy_tile(j_begin, j_end, dest, src);
-    }
-} // }}}
-
 ///////////////////////////////////////////////////////////////////////////////
+
+template <typename T>
+inline void copy_tile(
+    typename array3d<T, layout_right>::size_type j_begin
+  , typename array3d<T, layout_right>::size_type j_end
+  , array3d<T, layout_right>& dest
+  , array3d<T, layout_right> const& src
+    ) noexcept TSB_ALWAYS_INLINE;
 
 template <typename T>
 inline void copy_tile(
@@ -101,25 +127,6 @@ inline void copy_tile(
             for (auto k = 0; k < nz; ++k)
                 destp[k] = srcp[k];
         }
-} // }}}
-
-template <typename T>
-inline void copy(
-    typename array3d<T, layout_right>::size_type tw
-  , array3d<T, layout_right>& dest
-  , array3d<T, layout_right> const& src
-    ) noexcept
-{ // {{{
-    auto const ny = src.ny();
-
-    #pragma omp parallel for schedule(static) 
-    for (auto j = 0; j < ny; j += tw)
-    {
-        auto const j_begin = j;
-        auto const j_end   = j + tw;
-
-        copy_tile(j_begin, j_end, dest, src);
-    }
 } // }}}
 
 } // tsb

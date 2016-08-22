@@ -9,8 +9,8 @@
 #define TSB_27F35FCA_6FAA_48D2_8E99_8E7B386841F5
 
 #include "assume.hpp"
+#include "always_inline.hpp"
 #include "array3d.hpp"
-#include "fp_equals.hpp"
 
 namespace tsb
 {
@@ -20,7 +20,18 @@ namespace tsb
 ///////////////////////////////////////////////////////////////////////////////
 
 template <typename T>
-inline void residual(
+inline void residual_tile(
+    typename array3d<T, layout_left>::size_type j_begin
+  , typename array3d<T, layout_left>::size_type j_end
+  , array3d<T, layout_left>& r       // Residual
+  , array3d<T, layout_left> const& a // Lower band
+  , array3d<T, layout_left> const& b // Diagonal
+  , array3d<T, layout_left> const& c // Upper band
+  , array3d<T, layout_left> const& u // Solution
+    ) noexcept TSB_ALWAYS_INLINE;
+
+template <typename T>
+inline void residual_tile(
     typename array3d<T, layout_left>::size_type j_begin
   , typename array3d<T, layout_left>::size_type j_end
   , array3d<T, layout_left>& r       // Residual
@@ -29,7 +40,7 @@ inline void residual(
   , array3d<T, layout_left> const& c // Upper band
   , array3d<T, layout_left> const& u // Solution
     ) noexcept
-{
+{ // {{{
     auto const nx = b.nx();
     auto const nz = b.nz();
 
@@ -150,24 +161,23 @@ inline void residual(
                      - rnz1p[i];
         }
     }
-}
-
-template <typename T>
-inline void residual(
-    array3d<T, layout_left>& r       // Residual
-  , array3d<T, layout_left> const& a // Lower band
-  , array3d<T, layout_left> const& b // Diagonal
-  , array3d<T, layout_left> const& c // Upper band
-  , array3d<T, layout_left> const& u // Solution
-    ) noexcept
-{
-    residual(0, r.ny(), r, a, b, c, u);
-}
+} // }}}
 
 ///////////////////////////////////////////////////////////////////////////////
 
 template <typename T>
-inline void residual(
+inline void residual_tile(
+    typename array3d<T, layout_right>::size_type j_begin
+  , typename array3d<T, layout_right>::size_type j_end
+  , array3d<T, layout_right>& r       // Residual
+  , array3d<T, layout_right> const& a // Lower band
+  , array3d<T, layout_right> const& b // Diagonal
+  , array3d<T, layout_right> const& c // Upper band
+  , array3d<T, layout_right> const& u // Solution
+    ) noexcept TSB_ALWAYS_INLINE;
+
+template <typename T>
+inline void residual_tile(
     typename array3d<T, layout_right>::size_type j_begin
   , typename array3d<T, layout_right>::size_type j_end
   , array3d<T, layout_right>& r       // Residual
@@ -176,7 +186,7 @@ inline void residual(
   , array3d<T, layout_right> const& c // Upper band
   , array3d<T, layout_right> const& u // Solution
     ) noexcept
-{
+{ // {{{
     auto const nx = r.nx();
     auto const nz = r.nz();
 
@@ -309,19 +319,7 @@ inline void residual(
                          - rnz1p[jburs];
         }
     }
-}
-
-template <typename T>
-inline void residual(
-    array3d<T, layout_right>& r       // Residual
-  , array3d<T, layout_right> const& a // Lower band
-  , array3d<T, layout_right> const& b // Diagonal
-  , array3d<T, layout_right> const& c // Upper band
-  , array3d<T, layout_right> const& u // Solution
-    ) noexcept
-{
-    residual(0, r.ny(), r, a, b, c, u);
-}
+} // }}}
 
 } // tsb
 

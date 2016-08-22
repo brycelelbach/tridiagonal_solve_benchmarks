@@ -9,10 +9,41 @@
 #define TSB_FE674664_DBCF_40FD_A5C0_EECCA0FBE78F
 
 #include "assume.hpp"
+#include "always_inline.hpp"
 #include "array3d.hpp"
 
 namespace tsb
 {
+
+///////////////////////////////////////////////////////////////////////////////
+
+template <typename T, typename Layout, typename InitialConditions>
+void set_initial_conditions(
+    typename array3d<T, Layout>::size_type tw
+  , array3d<T, Layout>& u // Solution
+  , InitialConditions&& ics
+    ) noexcept TSB_ALWAYS_INLINE;
+
+template <typename T, typename Layout, typename InitialConditions>
+void set_initial_conditions(
+    typename array3d<T, Layout>::size_type tw
+  , array3d<T, Layout>& u // Solution
+  , InitialConditions&& ics
+    ) noexcept
+{ // {{{
+    auto const ny = u.ny();
+
+    #pragma omp parallel for schedule(static) 
+    for (auto j = 0; j < ny; j += tw)
+    {
+        auto const j_begin = j;
+        auto const j_end   = j + tw;
+
+        set_initial_conditions_tile(
+            j_begin, j_end, u, std::forward<InitialConditions>(ics)
+        );
+    }
+} // }}}
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -22,8 +53,16 @@ void set_initial_conditions_tile(
   , typename array3d<T, layout_left>::size_type j_end
   , array3d<T, layout_left>& u // Solution
   , InitialConditions&& ics
+    ) noexcept TSB_ALWAYS_INLINE;
+
+template <typename T, typename InitialConditions>
+void set_initial_conditions_tile(
+    typename array3d<T, layout_left>::size_type j_begin
+  , typename array3d<T, layout_left>::size_type j_end
+  , array3d<T, layout_left>& u // Solution
+  , InitialConditions&& ics
     ) noexcept
-{
+{ // {{{
     auto const nx = u.nx();
     auto const nz = u.nz();
 
@@ -40,28 +79,7 @@ void set_initial_conditions_tile(
             for (auto i = 0; i < nx; ++i)
                 up[i] = ics(k);
         }
-}
-
-template <typename T, typename InitialConditions>
-void set_initial_conditions(
-    typename array3d<T, layout_left>::size_type tw
-  , array3d<T, layout_left>& u // Solution
-  , InitialConditions&& ics
-    ) noexcept
-{
-    auto const ny = u.ny();
-
-    #pragma omp parallel for schedule(static) 
-    for (auto j = 0; j < ny; j += tw)
-    {
-        auto const j_begin = j;
-        auto const j_end   = j + tw;
-
-        set_initial_conditions_tile(
-            j_begin, j_end, u, std::forward<InitialConditions>(ics)
-        );
-    }
-}
+} // }}}
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -71,8 +89,16 @@ void set_initial_conditions_tile(
   , typename array3d<T, layout_right>::size_type j_end
   , array3d<T, layout_right>& u // Solution
   , InitialConditions&& ics
+    ) noexcept TSB_ALWAYS_INLINE;
+
+template <typename T, typename InitialConditions>
+void set_initial_conditions_tile(
+    typename array3d<T, layout_right>::size_type j_begin
+  , typename array3d<T, layout_right>::size_type j_end
+  , array3d<T, layout_right>& u // Solution
+  , InitialConditions&& ics
     ) noexcept
-{
+{ // {{{
     auto const nx = u.nx();
     auto const nz = u.nz();
 
@@ -89,28 +115,7 @@ void set_initial_conditions_tile(
             for (auto k = 0; k < nz; ++k)
                 up[k] = ics(k);
         }
-}
-
-template <typename T, typename InitialConditions>
-void set_initial_conditions(
-    typename array3d<T, layout_right>::size_type tw
-  , array3d<T, layout_right>& u // Solution
-  , InitialConditions&& ics
-    ) noexcept
-{
-    auto const ny = u.ny();
-
-    #pragma omp parallel for schedule(static) 
-    for (auto j = 0; j < ny; j += tw)
-    {
-        auto const j_begin = j;
-        auto const j_end   = j + tw;
-
-        set_initial_conditions_tile(
-            j_begin, j_end, u, std::forward<InitialConditions>(ics)
-        );
-    }
-}
+} // }}}
 
 } // tsb
 

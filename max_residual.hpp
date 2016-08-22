@@ -11,16 +11,43 @@
 #include <limits>
 
 #include "assume.hpp"
+#include "always_inline.hpp"
+#include "fp_equals.hpp"
 #include "array3d.hpp"
 #include "residual.hpp"
+
+#warning Parallelization strategy needed.
 
 namespace tsb
 {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-template <typename T>
+template <typename T, typename Layout>
 inline T max_residual(
+    array3d<T, Layout>& r       // Residual
+  , array3d<T, Layout> const& a // Lower band
+  , array3d<T, Layout> const& b // Diagonal
+  , array3d<T, Layout> const& c // Upper band
+  , array3d<T, Layout> const& u // Solution
+    ) noexcept TSB_ALWAYS_INLINE;
+
+template <typename T, typename Layout>
+inline T max_residual(
+    array3d<T, Layout>& r       // Residual
+  , array3d<T, Layout> const& a // Lower band
+  , array3d<T, Layout> const& b // Diagonal
+  , array3d<T, Layout> const& c // Upper band
+  , array3d<T, Layout> const& u // Solution
+    ) noexcept
+{ // {{{
+    return max_residual_tile(0, b.ny(), r, a, b, c, u);
+} // }}}
+
+///////////////////////////////////////////////////////////////////////////////
+
+template <typename T>
+inline T max_residual_tile(
     typename array3d<T, layout_left>::size_type j_begin
   , typename array3d<T, layout_left>::size_type j_end
   , array3d<T, layout_left>& r       // Residual
@@ -29,11 +56,11 @@ inline T max_residual(
   , array3d<T, layout_left> const& c // Upper band
   , array3d<T, layout_left> const& u // Solution
     ) noexcept
-{
+{ // {{{
     auto const nx = b.nx();
     auto const nz = b.nz();
 
-    residual(j_begin, j_end, r, a, b, c, u);
+    residual_tile(j_begin, j_end, r, a, b, c, u);
 
     T mr = 0.0; 
 
@@ -73,24 +100,12 @@ inline T max_residual(
         }
 
     return mr;
-}
-
-template <typename T>
-inline T max_residual(
-    array3d<T, layout_left>& r       // Residual
-  , array3d<T, layout_left> const& a // Lower band
-  , array3d<T, layout_left> const& b // Diagonal
-  , array3d<T, layout_left> const& c // Upper band
-  , array3d<T, layout_left> const& u // Solution
-    ) noexcept
-{
-    return max_residual(0, b.ny(), r, a, b, c, u);
-}
+} // }}}
 
 ///////////////////////////////////////////////////////////////////////////////
 
 template <typename T>
-inline T max_residual(
+inline T max_residual_tile(
     typename array3d<T, layout_right>::size_type j_begin
   , typename array3d<T, layout_right>::size_type j_end
   , array3d<T, layout_right>& r       // Residual
@@ -99,11 +114,11 @@ inline T max_residual(
   , array3d<T, layout_right> const& c // Upper band
   , array3d<T, layout_right> const& u // Solution
     ) noexcept
-{
+{ // {{{
     auto const nx = b.nx();
     auto const nz = b.nz();
 
-    residual(j_begin, j_end, r, a, b, c, u);
+    residual_tile(j_begin, j_end, r, a, b, c, u);
 
     T mr = 0.0; 
 
@@ -138,19 +153,7 @@ inline T max_residual(
         }
 
     return mr;
-}
-
-template <typename T>
-inline T max_residual(
-    array3d<T, layout_right>& r       // Residual
-  , array3d<T, layout_right> const& a // Lower band
-  , array3d<T, layout_right> const& b // Diagonal
-  , array3d<T, layout_right> const& c // Upper band
-  , array3d<T, layout_right> const& u // Solution
-    ) noexcept
-{
-    return max_residual(0, b.ny(), r, a, b, c, u);
-}
+} // }}}
 
 } // tsb
 
