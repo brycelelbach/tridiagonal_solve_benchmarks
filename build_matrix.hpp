@@ -77,31 +77,22 @@ inline void build_matrix_tile(
 
     TSB_ASSUME(0 == (nx % 16)); // Assume unit stride is divisible by 16.
 
-    for (auto k = 0; k < nz; ++k)
+    for (auto k = 1; k < nz - 1; ++k)
         for (auto j = j_begin; j < j_end; ++j)
         {
+            T* __restrict__ ap = a(_, j, k - 1);
             T* __restrict__ bp = b(_, j, k);
-
-            TSB_ASSUME_ALIGNED(bp, 64);
-
-            #pragma simd
-            for (auto i = 0; i < nx; ++i)
-                bp[i] = b_term;
-        }
-
-    for (auto k = 0; k < nz - 1; ++k)
-        for (auto j = j_begin; j < j_end; ++j)
-        {
-            T* __restrict__ ap = a(_, j, k);
             T* __restrict__ cp = c(_, j, k);
 
             TSB_ASSUME_ALIGNED(ap, 64);
+            TSB_ASSUME_ALIGNED(bp, 64);
             TSB_ASSUME_ALIGNED(cp, 64);
 
             #pragma simd
             for (int i = 0; i < nx; ++i)
             {
                 ap[i] = ac_term;
+                bp[i] = b_term;
                 cp[i] = ac_term;
             }
         }
@@ -115,11 +106,11 @@ inline void build_matrix_tile(
         T* __restrict__ aendp   = a(_, j, nz - 2);
         T* __restrict__ bendp   = b(_, j, nz - 1);
 
-        __assume_aligned(bbeginp, 64);
-        __assume_aligned(cbeginp, 64);
+        TSB_ASSUME_ALIGNED(bbeginp, 64);
+        TSB_ASSUME_ALIGNED(cbeginp, 64);
 
-        __assume_aligned(aendp, 64);
-        __assume_aligned(bendp, 64);
+        TSB_ASSUME_ALIGNED(aendp, 64);
+        TSB_ASSUME_ALIGNED(bendp, 64);
 
         #pragma simd
         for (auto i = 0; i < nx; ++i)
@@ -163,25 +154,20 @@ inline void build_matrix_tile(
     for (auto i = 0; i < nx; ++i)
         for (auto j = j_begin; j < j_end; ++j)
         {
-            T* __restrict__ bp = b(i, j, _);
-
-            TSB_ASSUME_ALIGNED(bp, 64);
-
-            #pragma simd
-            for (auto k = 0; k < nz; ++k)
-                bp[k] = b_term;
-
             T* __restrict__ ap = a(i, j, _);
+            T* __restrict__ bp = b(i, j, _);
             T* __restrict__ cp = c(i, j, _);
 
             TSB_ASSUME_ALIGNED(ap, 64);
+            TSB_ASSUME_ALIGNED(bp, 64);
             TSB_ASSUME_ALIGNED(cp, 64);
 
             #pragma simd
-            for (auto k = 0; k < nz - 1; ++k)
+            for (auto k = 1; k < nz - 1; ++k)
             {
-                ap[k] = ac_term;
-                cp[k] = ac_term;
+                ap[k - 1] = ac_term;
+                bp[k]     = b_term;
+                cp[k]     = ac_term;
             }
         }
 
@@ -197,11 +183,11 @@ inline void build_matrix_tile(
         auto const ac_stride = a.stride_y();
         auto const b_stride  = b.stride_y();
 
-        TSB_ASSUME_ALIGNED(bbeginp, 8);
-        TSB_ASSUME_ALIGNED(cbeginp, 8);
+        TSB_ASSUME_ALIGNED_TO_TYPE(bbeginp);
+        TSB_ASSUME_ALIGNED_TO_TYPE(cbeginp);
 
-        TSB_ASSUME_ALIGNED(aendp, 8);
-        TSB_ASSUME_ALIGNED(bendp, 8);
+        TSB_ASSUME_ALIGNED_TO_TYPE(aendp);
+        TSB_ASSUME_ALIGNED_TO_TYPE(bendp);
 
         // NOTE: Strided access.
         #pragma simd
