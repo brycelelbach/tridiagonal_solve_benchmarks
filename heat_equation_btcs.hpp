@@ -36,10 +36,6 @@
 #include "nr_rcp_divider.hpp"
 #include "align_policies.hpp"
 
-#warning Do chunking for step()'s parallel for manually and go back to per-thread timing
-
-#warning Lift build_matrix and combine *_rolling_matrix and *_full_matrix solver base classes
-
 namespace tsb
 {
 
@@ -107,8 +103,17 @@ struct heat_equation_btcs : enable_fp_exceptions
     // Allocate the arrays if needed.
     void allocate_arrays()
     { 
-        // Disable any alignment strategies that are not enabled in our
-        // align_policy.
+        // Allocate storage for the problem state.
+        u.resize(array_base_align, nx, ny, nz, 0, plane_pad, 0);
+
+        // Allocate storage for the matrix.
+        A.resize(
+            tw, array_base_align, array_align_step, plane_pad
+          , nx, ny, nz
+        );
+
+        // For the matrix, disable any alignment strategies that are not
+        // enabled in our align_policy.
         auto constexpr ap = solver_traits<Derived>::align_policy;
 
         auto const array_base_align_ = ( ap & use_array_base_align
@@ -120,15 +125,6 @@ struct heat_equation_btcs : enable_fp_exceptions
         auto const plane_pad_        = ( ap & use_plane_pad
                                        ? plane_pad
                                        : 0);
-
-        // Allocate storage for the problem state.
-        u.resize(array_base_align_, nx, ny, nz, 0, plane_pad_, 0);
-
-        // Allocate storage for the matrix.
-        A.resize(
-            tw, array_base_align_, array_align_step_, plane_pad_
-          , nx, ny, nz
-        );
 
         // Allocate storage for the residual.
         r.resize(array_base_align_, nx, ny, nz);
@@ -255,7 +251,7 @@ struct heat_equation_btcs : enable_fp_exceptions
 
         value_type const bandwidth = ( ( sizeof(value_type)
                                        * ( (4.0 * nx * ny * nz)
-                                         + (2.0 * nx * ny * (nz - 1)))
+                                         + (4.0 * nx * ny * (nz - 1)))
                                        * ns)
                                      / (1 << 30))
                                    / solvertime;
@@ -324,7 +320,7 @@ struct heat_equation_btcs_full_matrix
   : heat_equation_btcs<
         heat_equation_btcs_full_matrix<Derived>
     >
-{
+{ // {
     using base_type = heat_equation_btcs<
         heat_equation_btcs_full_matrix<Derived>
     >;
@@ -344,12 +340,7 @@ struct heat_equation_btcs_full_matrix
     }
 
   public:
-    void initialize() noexcept
-    {
-        build_matrix(
-            this->tw, this->A_coef, this->A.a(), this->A.b(), this->A.c()
-        );
-    }
+    void initialize() noexcept {}
 
     void step(size_type s) noexcept
     {
@@ -358,236 +349,16 @@ struct heat_equation_btcs_full_matrix
 
     void post_step(size_type s) noexcept
     {
-        build_matrix(
-            this->tw, this->A_coef, this->A.a(), this->A.b(), this->A.c()
-        );
+        if (this->verify)
+            build_matrix(
+                this->tw, this->A_coef, this->A.a(), this->A.b(), this->A.c()
+            );
     }
 
     static std::string name() noexcept
     {
         return Derived::name();
     }
-};
-
-///////////////////////////////////////////////////////////////////////////////
-
-template <
-    typename T
-  , typename Divider = operator_divider<T>
-  , typename Timer   = high_resolution_timer
-    >
-struct heat_equation_btcs_streaming_repeated_divide
-  : heat_equation_btcs_full_matrix<
-        heat_equation_btcs_streaming_repeated_divide<
-            T, Divider, Timer
-        >
-    >
-{
-    using base_type = heat_equation_btcs_full_matrix<
-        heat_equation_btcs_streaming_repeated_divide<
-            T, Divider, Timer
-        >
-    >;
-
-    using divider = Divider;
-
-    using size_type  = typename base_type::size_type;
-    using value_type = typename base_type::value_type;
-
-    void step(size_type s) noexcept
-    {
-        #pragma omp parallel for schedule(static)
-        for (int j = 0; j < this->ny; j += this->tw)
-        {
-            auto const j_begin = j;
-            auto const j_end   = j + this->tw;
-
-            using namespace tsb::streaming;
-
-            forward_elimination_tile(
-                j_begin, j_end, this->A.a(), this->A.b(), this->A.c(), this->u
-              , repeated_divide::forward_elimination_kernel<value_type, divider>
-            );
-
-            pre_substitution_tile(
-                j_begin, j_end, this->A.b(), this->u
-              , repeated_divide::pre_substitution_kernel<value_type, divider>
-            );
-
-            back_substitution_tile(
-                j_begin, j_end, this->A.b(), this->A.c(), this->u
-              , repeated_divide::back_substitution_kernel<value_type, divider>
-            );
-        }
-    }
-
-    static std::string name() noexcept
-    {
-        return std::string("STREAMING.REPEATED-") + divider::name();
-    }
-};
-
-template <
-    typename T
-  , typename Divider
-  , typename Timer
-    >
-struct solver_traits<
-    heat_equation_btcs_full_matrix<
-        heat_equation_btcs_streaming_repeated_divide<
-            T, Divider, Timer
-        >
-    >
-> {
-    using matrix = full_matrix<T, layout_left>;
-
-    using timer = Timer; 
-
-    static align_policy_enum constexpr align_policy = use_all_align_policies;
-};
-
-///////////////////////////////////////////////////////////////////////////////
-
-template <
-    typename T
-  , typename Divider = operator_divider<T>
-  , typename Timer   = high_resolution_timer
-    >
-struct heat_equation_btcs_streaming_cached_divide
-  : heat_equation_btcs_full_matrix<
-        heat_equation_btcs_streaming_cached_divide<
-            T, Divider, Timer
-        >
-    >
-{
-    using base_type = heat_equation_btcs_full_matrix<
-        heat_equation_btcs_streaming_cached_divide<
-            T, Divider, Timer
-        >
-    >;
-
-    using size_type  = typename base_type::size_type;
-    using value_type = typename base_type::value_type;
-
-    using divider = Divider;
-
-    void step(size_type s) noexcept
-    {
-        #pragma omp parallel for schedule(static)
-        for (int j = 0; j < this->ny; j += this->tw)
-        {
-            auto const j_begin = j;
-            auto const j_end   = j + this->tw;
-
-            using namespace tsb::streaming;
-
-            pre_elimination_tile(
-                j_begin, j_end, this->A.b() 
-              , cached_divide::pre_elimination_kernel<value_type, divider>
-            );
-
-            forward_elimination_tile(
-                j_begin, j_end, this->A.a(), this->A.b(), this->A.c(), this->u
-              , cached_divide::forward_elimination_kernel<value_type, divider>
-            );
-
-            pre_substitution_tile(
-                j_begin, j_end, this->A.b(), this->u
-              , cached_divide::pre_substitution_kernel<value_type>
-            );
-
-            back_substitution_tile(
-                j_begin, j_end, this->A.b(), this->A.c(), this->u
-              , cached_divide::back_substitution_kernel<value_type>
-            );
-        }
-    }
-
-    static std::string name() noexcept
-    {
-        return std::string("STREAMING.CACHED-") + divider::name();
-    }
-};
-
-template <
-    typename T
-  , typename Divider
-  , typename Timer
-    >
-struct solver_traits<
-    heat_equation_btcs_full_matrix<
-        heat_equation_btcs_streaming_cached_divide<
-            T, Divider, Timer
-        >
-    >
-> {
-    using matrix = full_matrix<T, layout_left>;
-
-    using timer = Timer; 
-
-    static align_policy_enum constexpr align_policy = use_all_align_policies;
-};
-
-///////////////////////////////////////////////////////////////////////////////
-
-template <
-    typename T
-  , typename Timer = high_resolution_timer
-    >
-struct heat_equation_btcs_mkl_z_contiguous_full_matrix
-  : heat_equation_btcs_full_matrix<
-        heat_equation_btcs_mkl_z_contiguous_full_matrix<
-            T, Timer
-        >
-    >
-{
-    using base_type = heat_equation_btcs_full_matrix<
-        heat_equation_btcs_mkl_z_contiguous_full_matrix<
-            T, Timer
-        >
-    >;
-
-    using size_type  = typename base_type::size_type;
-    using value_type = typename base_type::value_type;
-
-    void step(size_type s) noexcept
-    {
-        #pragma omp parallel for schedule(static)
-        for (int j = 0; j < this->ny; j += this->tw)
-        {
-            auto const j_begin = j;
-            auto const j_end   = j + this->tw;
-
-            using namespace tsb::mkl;
-
-            solve(
-                j_begin, j_end, this->A.a(), this->A.b(), this->A.c(), this->u
-            );
-        }
-    }
-
-    static std::string name() noexcept
-    {
-        return "MKL.Z-CONTIGUOUS.FULL-MATRIX"; 
-    }
-};
-
-template <
-    typename T
-  , typename Timer
-    >
-struct solver_traits<
-    heat_equation_btcs_full_matrix<
-        heat_equation_btcs_mkl_z_contiguous_full_matrix<
-            T, Timer
-        >
-    >
-> {
-    using matrix = full_matrix<T, layout_right>;
-
-    using timer = Timer; 
-
-    static align_policy_enum constexpr align_policy = use_all_align_policies;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -617,16 +388,7 @@ struct heat_equation_btcs_rolling_matrix
     }
 
   public:
-    void initialize() noexcept
-    {
-        for (auto tn = 0; tn < ::omp_get_max_threads(); ++tn)
-        {
-            build_matrix_tile(
-                0, this->tw, this->A_coef
-              , this->A.a(tn), this->A.b(tn), this->A.c(tn)
-            );
-        }
-    }
+    void initialize() noexcept {}
 
     void step(size_type s) noexcept
     {
@@ -635,13 +397,14 @@ struct heat_equation_btcs_rolling_matrix
 
     void post_step(size_type s) noexcept
     {
-        for (auto tn = 0; tn < ::omp_get_max_threads(); ++tn)
-        {
-            build_matrix_tile(
-                0, this->tw, this->A_coef
-              , this->A.a(tn), this->A.b(tn), this->A.c(tn)
-            );
-        }
+        if (this->verify)
+            for (auto tn = 0; tn < ::omp_get_max_threads(); ++tn)
+            {
+                build_matrix_tile(
+                    0, this->tw, this->A_coef
+                  , this->A.a(tn), this->A.b(tn), this->A.c(tn)
+                );
+            }
     }
 
     static std::string name() noexcept
@@ -654,17 +417,439 @@ struct heat_equation_btcs_rolling_matrix
 
 template <
     typename T
+  , typename Divider = operator_divider<T>
+  , typename Timer   = high_resolution_timer
+    >
+struct heat_equation_btcs_full_matrix_streaming_repeated_divide
+  : heat_equation_btcs_full_matrix<
+        heat_equation_btcs_full_matrix_streaming_repeated_divide<
+            T, Divider, Timer
+        >
+    >
+{
+    using base_type = heat_equation_btcs_full_matrix<
+        heat_equation_btcs_full_matrix_streaming_repeated_divide<
+            T, Divider, Timer
+        >
+    >;
+
+    using divider = Divider;
+
+    using size_type  = typename base_type::size_type;
+    using value_type = typename base_type::value_type;
+
+    void step(size_type s) noexcept
+    {
+        #pragma omp parallel for schedule(static)
+        for (int j = 0; j < this->ny; j += this->tw)
+        {
+            auto const j_begin = j;
+            auto const j_end   = j + this->tw;
+
+            using namespace tsb::streaming;
+
+            build_matrix_tile(
+                j_begin, j_end, this->A_coef
+              , this->A.a(), this->A.b(), this->A.c()
+            );
+
+            forward_elimination_tile(
+                j_begin, j_end, this->A.a(), this->A.b(), this->A.c(), this->u
+              , repeated_divide::forward_elimination_kernel<value_type, divider>
+            );
+
+            pre_substitution_tile(
+                j_begin, j_end, this->A.b(), this->u
+              , repeated_divide::pre_substitution_kernel<value_type, divider>
+            );
+
+            back_substitution_tile(
+                j_begin, j_end, this->A.b(), this->A.c(), this->u
+              , repeated_divide::back_substitution_kernel<value_type, divider>
+            );
+        }
+    }
+
+    static std::string name() noexcept
+    {
+        return std::string("FULL-MATRIX.STREAMING.REPEATED-")
+             + divider::name();
+    }
+};
+
+template <
+    typename T
+  , typename Divider
+  , typename Timer
+    >
+struct solver_traits<
+    heat_equation_btcs_full_matrix<
+        heat_equation_btcs_full_matrix_streaming_repeated_divide<
+            T, Divider, Timer
+        >
+    >
+> {
+    using matrix = full_matrix<T, layout_left>;
+
+    using timer = Timer; 
+
+    static align_policy_enum constexpr align_policy = use_all_align_policies;
+};
+
+///////////////////////////////////////////////////////////////////////////////
+
+template <
+    typename T
+  , typename Divider = operator_divider<T>
+  , typename Timer   = high_resolution_timer
+    >
+struct heat_equation_btcs_full_matrix_streaming_cached_divide
+  : heat_equation_btcs_full_matrix<
+        heat_equation_btcs_full_matrix_streaming_cached_divide<
+            T, Divider, Timer
+        >
+    >
+{
+    using base_type = heat_equation_btcs_full_matrix<
+        heat_equation_btcs_full_matrix_streaming_cached_divide<
+            T, Divider, Timer
+        >
+    >;
+
+    using size_type  = typename base_type::size_type;
+    using value_type = typename base_type::value_type;
+
+    using divider = Divider;
+
+    void step(size_type s) noexcept
+    {
+        #pragma omp parallel for schedule(static)
+        for (int j = 0; j < this->ny; j += this->tw)
+        {
+            auto const j_begin = j;
+            auto const j_end   = j + this->tw;
+
+            using namespace tsb::streaming;
+
+            build_matrix_tile(
+                j_begin, j_end, this->A_coef
+              , this->A.a(), this->A.b(), this->A.c()
+            );
+
+            pre_elimination_tile(
+                j_begin, j_end, this->A.b() 
+              , cached_divide::pre_elimination_kernel<value_type, divider>
+            );
+
+            forward_elimination_tile(
+                j_begin, j_end, this->A.a(), this->A.b(), this->A.c(), this->u
+              , cached_divide::forward_elimination_kernel<value_type, divider>
+            );
+
+            pre_substitution_tile(
+                j_begin, j_end, this->A.b(), this->u
+              , cached_divide::pre_substitution_kernel<value_type>
+            );
+
+            back_substitution_tile(
+                j_begin, j_end, this->A.b(), this->A.c(), this->u
+              , cached_divide::back_substitution_kernel<value_type>
+            );
+        }
+    }
+
+    static std::string name() noexcept
+    {
+        return std::string("FULL-MATRIX.STREAMING.CACHED-")
+             + divider::name();
+    }
+};
+
+template <
+    typename T
+  , typename Divider
+  , typename Timer
+    >
+struct solver_traits<
+    heat_equation_btcs_full_matrix<
+        heat_equation_btcs_full_matrix_streaming_cached_divide<
+            T, Divider, Timer
+        >
+    >
+> {
+    using matrix = full_matrix<T, layout_left>;
+
+    using timer = Timer; 
+
+    static align_policy_enum constexpr align_policy = use_all_align_policies;
+};
+
+///////////////////////////////////////////////////////////////////////////////
+
+template <
+    typename T
   , typename Timer = high_resolution_timer
     >
-struct heat_equation_btcs_mkl_z_contiguous_rolling_matrix
+struct heat_equation_btcs_full_matrix_mkl_z_contiguous
+  : heat_equation_btcs_full_matrix<
+        heat_equation_btcs_full_matrix_mkl_z_contiguous<
+            T, Timer
+        >
+    >
+{
+    using base_type = heat_equation_btcs_full_matrix<
+        heat_equation_btcs_full_matrix_mkl_z_contiguous<
+            T, Timer
+        >
+    >;
+
+    using size_type  = typename base_type::size_type;
+    using value_type = typename base_type::value_type;
+
+    void step(size_type s) noexcept
+    {
+        #pragma omp parallel for schedule(static)
+        for (int j = 0; j < this->ny; j += this->tw)
+        {
+            auto const j_begin = j;
+            auto const j_end   = j + this->tw;
+
+            using namespace tsb::mkl;
+
+            build_matrix_tile(
+                j_begin, j_end, this->A_coef
+              , this->A.a(), this->A.b(), this->A.c()
+            );
+
+            solve_tile(
+                j_begin, j_end, this->A.a(), this->A.b(), this->A.c(), this->u
+            );
+        }
+    }
+
+    static std::string name() noexcept
+    {
+        return "FULL-MATRIX.MKL.Z-CONTIGUOUS"; 
+    }
+};
+
+template <
+    typename T
+  , typename Timer
+    >
+struct solver_traits<
+    heat_equation_btcs_full_matrix<
+        heat_equation_btcs_full_matrix_mkl_z_contiguous<
+            T, Timer
+        >
+    >
+> {
+    using matrix = full_matrix<T, layout_right>;
+
+    using timer = Timer; 
+
+    static align_policy_enum constexpr align_policy = use_all_align_policies;
+};
+
+///////////////////////////////////////////////////////////////////////////////
+
+template <
+    typename T
+  , typename Divider = operator_divider<T>
+  , typename Timer = high_resolution_timer
+    >
+struct heat_equation_btcs_rolling_matrix_streaming_repeated_divide
   : heat_equation_btcs_rolling_matrix<
-        heat_equation_btcs_mkl_z_contiguous_rolling_matrix<
+        heat_equation_btcs_rolling_matrix_streaming_repeated_divide<
+            T, Divider, Timer
+        >
+    >
+{
+    using base_type = heat_equation_btcs_rolling_matrix<
+        heat_equation_btcs_rolling_matrix_streaming_repeated_divide<
+            T, Divider, Timer
+        >
+    >;
+
+    using size_type  = typename base_type::size_type;
+    using value_type = typename base_type::value_type;
+
+    using divider = Divider;
+
+    void step(size_type s) noexcept
+    {
+        #pragma omp parallel for schedule(static)
+        for (int j = 0; j < this->ny; j += this->tw)
+        {
+            auto const j_begin = j;
+            auto const j_end   = j + this->tw;
+
+            auto const tn = ::omp_get_thread_num();
+
+            using namespace tsb::streaming;
+
+            build_matrix_tile(
+                0, this->tw, this->A_coef
+              , this->A.a(tn), this->A.b(tn), this->A.c(tn)
+            );
+
+            forward_elimination_tile(
+                0, this->tw, j_begin, j_end
+              , this->A.a(tn), this->A.b(tn), this->A.c(tn), this->u
+              , repeated_divide::forward_elimination_kernel<value_type, divider>
+            );
+
+            pre_substitution_tile(
+                0, this->tw, j_begin, j_end
+              , this->A.b(tn), this->u
+              , repeated_divide::pre_substitution_kernel<value_type, divider>
+            );
+
+            back_substitution_tile(
+                0, this->tw, j_begin, j_end
+              , this->A.b(tn), this->A.c(tn), this->u
+              , repeated_divide::back_substitution_kernel<value_type, divider>
+            );
+        }
+    }
+
+    static std::string name() noexcept
+    {
+        return std::string("ROLLING-MATRIX.STREAMING.CACHED-")
+             + divider::name();
+    }
+};
+
+template <
+    typename T
+  , typename Divider
+  , typename Timer
+    >
+struct solver_traits<
+    heat_equation_btcs_rolling_matrix<
+        heat_equation_btcs_rolling_matrix_streaming_repeated_divide<
+            T, Divider, Timer
+        >
+    >
+> {
+    using matrix = rolling_matrix<T, layout_left>;
+
+    using timer = Timer; 
+
+    static align_policy_enum constexpr align_policy =
+        align_policy_enum(use_array_base_align | use_array_align_step);
+};
+
+///////////////////////////////////////////////////////////////////////////////
+
+template <
+    typename T
+  , typename Divider = operator_divider<T>
+  , typename Timer = high_resolution_timer
+    >
+struct heat_equation_btcs_rolling_matrix_streaming_cached_divide
+  : heat_equation_btcs_rolling_matrix<
+        heat_equation_btcs_rolling_matrix_streaming_cached_divide<
+            T, Divider, Timer
+        >
+    >
+{
+    using base_type = heat_equation_btcs_rolling_matrix<
+        heat_equation_btcs_rolling_matrix_streaming_cached_divide<
+            T, Divider, Timer
+        >
+    >;
+
+    using size_type  = typename base_type::size_type;
+    using value_type = typename base_type::value_type;
+
+    using divider = Divider;
+
+    void step(size_type s) noexcept
+    {
+        #pragma omp parallel for schedule(static)
+        for (int j = 0; j < this->ny; j += this->tw)
+        {
+            auto const j_begin = j;
+            auto const j_end   = j + this->tw;
+
+            auto const tn = ::omp_get_thread_num();
+
+            using namespace tsb::streaming;
+
+            build_matrix_tile(
+                0, this->tw, this->A_coef
+              , this->A.a(tn), this->A.b(tn), this->A.c(tn)
+            );
+
+            pre_elimination_tile(
+                0, this->tw, this->A.b(tn) 
+              , cached_divide::pre_elimination_kernel<value_type, divider>
+            );
+
+            forward_elimination_tile(
+                0, this->tw, j_begin, j_end
+              , this->A.a(tn), this->A.b(tn), this->A.c(tn), this->u
+              , cached_divide::forward_elimination_kernel<value_type, divider>
+            );
+
+            pre_substitution_tile(
+                0, this->tw, j_begin, j_end
+              , this->A.b(tn), this->u
+              , cached_divide::pre_substitution_kernel<value_type>
+            );
+
+            back_substitution_tile(
+                0, this->tw, j_begin, j_end
+              , this->A.b(tn), this->A.c(tn), this->u
+              , cached_divide::back_substitution_kernel<value_type>
+            );
+        }
+    }
+
+    static std::string name() noexcept
+    {
+        return std::string("FULL-MATRIX.STREAMING.CACHED-")
+             + divider::name();
+    }
+};
+
+template <
+    typename T
+  , typename Divider
+  , typename Timer
+    >
+struct solver_traits<
+    heat_equation_btcs_rolling_matrix<
+        heat_equation_btcs_rolling_matrix_streaming_cached_divide<
+            T, Divider, Timer
+        >
+    >
+> {
+    using matrix = rolling_matrix<T, layout_left>;
+
+    using timer = Timer; 
+
+    static align_policy_enum constexpr align_policy =
+        align_policy_enum(use_array_base_align | use_array_align_step);
+};
+
+
+///////////////////////////////////////////////////////////////////////////////
+
+template <
+    typename T
+  , typename Timer = high_resolution_timer
+    >
+struct heat_equation_btcs_rolling_matrix_mkl_z_contiguous
+  : heat_equation_btcs_rolling_matrix<
+        heat_equation_btcs_rolling_matrix_mkl_z_contiguous<
             T, Timer
         >
     >
 {
     using base_type = heat_equation_btcs_rolling_matrix<
-        heat_equation_btcs_mkl_z_contiguous_rolling_matrix<
+        heat_equation_btcs_rolling_matrix_mkl_z_contiguous<
             T, Timer
         >
     >;
@@ -684,7 +869,12 @@ struct heat_equation_btcs_mkl_z_contiguous_rolling_matrix
 
             using namespace tsb::mkl;
 
-            solve(
+            build_matrix_tile(
+                0, this->tw, this->A_coef
+              , this->A.a(tn), this->A.b(tn), this->A.c(tn)
+            );
+
+            solve_tile(
                 0, this->tw, j_begin, j_end
               , this->A.a(tn), this->A.b(tn), this->A.c(tn), this->u
             );
@@ -693,7 +883,7 @@ struct heat_equation_btcs_mkl_z_contiguous_rolling_matrix
 
     static std::string name() noexcept
     {
-        return "MKL.Z-CONTIGUOUS.ROLLING-MATRIX"; 
+        return "ROLLING-MATRIX.MKL.Z-CONTIGUOUS"; 
     }
 };
 
@@ -703,7 +893,7 @@ template <
     >
 struct solver_traits<
     heat_equation_btcs_rolling_matrix<
-        heat_equation_btcs_mkl_z_contiguous_rolling_matrix<
+        heat_equation_btcs_rolling_matrix_mkl_z_contiguous<
             T, Timer
         >
     >
@@ -712,7 +902,8 @@ struct solver_traits<
 
     using timer = Timer; 
 
-    static align_policy_enum constexpr align_policy = use_no_align_policies;
+    static align_policy_enum constexpr align_policy = 
+        align_policy_enum(use_array_base_align | use_array_align_step);
 };
 
 } // tsb

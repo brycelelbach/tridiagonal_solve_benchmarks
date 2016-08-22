@@ -9,7 +9,7 @@
 
 int main()
 {
-    tsb::heat_equation_btcs_mkl_z_contiguous_full_matrix<double> s;
+    tsb::heat_equation_btcs_full_matrix_streaming_cached_divide<double> s;
 
     s.run();
 }

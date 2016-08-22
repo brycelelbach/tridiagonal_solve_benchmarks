@@ -9,7 +9,7 @@
 
 int main()
 {
-    tsb::heat_equation_btcs_mkl_z_contiguous_rolling_matrix<double> s;
+    tsb::heat_equation_btcs_rolling_matrix_streaming_repeated_divide<double> s;
 
     s.run();
 }

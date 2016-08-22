@@ -9,7 +9,7 @@
 
 int main()
 {
-    tsb::heat_equation_btcs_streaming_cached_divide<float> s;
+    tsb::heat_equation_btcs_full_matrix_streaming_repeated_divide<float> s;
 
     s.run();
 }

@@ -9,9 +9,9 @@
 
 int main()
 {
-    tsb::heat_equation_btcs_streaming_cached_divide<
+    tsb::heat_equation_btcs_full_matrix_streaming_repeated_divide<
         double
-      , tsb::nr_rcp_divider<double, float, 1>
+      , tsb::nr_rcp_divider<double, float, 0>
     > s;
 
     s.run();
