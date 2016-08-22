@@ -16,8 +16,6 @@
 #include "array3d.hpp"
 #include "residual.hpp"
 
-#warning Parallelization strategy needed.
-
 namespace tsb
 {
 
@@ -76,7 +74,7 @@ inline T max_residual_tile(
 
             auto const stride = r.stride_z();
 
-            TSB_ASSUME_ALIGNED(rp, 8);
+            TSB_ASSUME_ALIGNED_TO_TYPE(rp);
 
             // NOTE: Strided access.
             #pragma simd

@@ -42,7 +42,7 @@ inline T l2_norm(
 
             auto const stride = u.stride_z();
 
-            TSB_ASSUME_ALIGNED(up, 8);
+            TSB_ASSUME_ALIGNED_TO_TYPE(up);
 
             // NOTE: Strided access.
             #pragma simd
