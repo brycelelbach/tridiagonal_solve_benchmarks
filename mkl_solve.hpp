@@ -20,7 +20,7 @@ namespace tsb { namespace mkl
 ///////////////////////////////////////////////////////////////////////////////
 
 template <typename T>
-inline void solve(
+inline void solve_tile(
     typename array3d<T, layout_right>::size_type jA_begin
   , typename array3d<T, layout_right>::size_type jA_end
   , typename array3d<T, layout_right>::size_type ju_begin
@@ -32,7 +32,7 @@ inline void solve(
     ) noexcept TSB_ALWAYS_INLINE;
 
 template <typename T>
-inline void solve(
+inline void solve_tile(
     typename array3d<T, layout_right>::size_type jA_begin
   , typename array3d<T, layout_right>::size_type jA_end
   , typename array3d<T, layout_right>::size_type ju_begin
@@ -87,7 +87,7 @@ inline void solve(
 }
 
 template <typename T>
-inline void solve(
+inline void solve_tile(
     typename array3d<T, layout_right>::size_type j_begin
   , typename array3d<T, layout_right>::size_type j_end
   , array3d<T, layout_right>& a                 // Lower band.
@@ -97,7 +97,7 @@ inline void solve(
     ) noexcept TSB_ALWAYS_INLINE;
 
 template <typename T>
-inline void solve(
+inline void solve_tile(
     typename array3d<T, layout_right>::size_type j_begin
   , typename array3d<T, layout_right>::size_type j_end
   , array3d<T, layout_right>& a                 // Lower band.
@@ -106,7 +106,7 @@ inline void solve(
   , array3d<T, layout_right>& u                 // Solution.
     ) noexcept
 {
-    solve(j_begin, j_end, j_begin, j_end, a, b, c, u);
+    solve_tile(j_begin, j_end, j_begin, j_end, a, b, c, u);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
