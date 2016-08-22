@@ -20,7 +20,7 @@ namespace tsb { namespace streaming
 ///////////////////////////////////////////////////////////////////////////////
 
 template <typename T, typename F>
-inline void pre_elimination(
+inline void pre_elimination_tile(
     typename array3d<T, layout_left>::size_type j_begin
   , typename array3d<T, layout_left>::size_type j_end
   , array3d<T, layout_left>& b                 // Diagonal.
@@ -28,7 +28,7 @@ inline void pre_elimination(
     ) noexcept TSB_ALWAYS_INLINE;
 
 template <typename T, typename F>
-inline void pre_elimination(
+inline void pre_elimination_tile(
     typename array3d<T, layout_left>::size_type j_begin
   , typename array3d<T, layout_left>::size_type j_end
   , array3d<T, layout_left>& b                 // Diagonal.
@@ -55,7 +55,7 @@ inline void pre_elimination(
 }
 
 template <typename T, typename F>
-inline void forward_elimination(
+inline void forward_elimination_tile(
     typename array3d<T, layout_left>::size_type j_begin
   , typename array3d<T, layout_left>::size_type j_end
   , array3d<T, layout_left> const& a           // Lower band.
@@ -66,7 +66,7 @@ inline void forward_elimination(
     ) noexcept TSB_ALWAYS_INLINE;
 
 template <typename T, typename F>
-inline void forward_elimination(
+inline void forward_elimination_tile(
     typename array3d<T, layout_left>::size_type j_begin
   , typename array3d<T, layout_left>::size_type j_end
   , array3d<T, layout_left> const& a           // Lower band.
@@ -123,7 +123,7 @@ inline void forward_elimination(
 }
 
 template <typename T, typename F>
-inline void pre_substitution(
+inline void pre_substitution_tile(
     typename array3d<T, layout_left>::size_type j_begin
   , typename array3d<T, layout_left>::size_type j_end
   , array3d<T, layout_left> const& b           // Diagonal.
@@ -132,7 +132,7 @@ inline void pre_substitution(
     ) noexcept TSB_ALWAYS_INLINE;
 
 template <typename T, typename F>
-inline void pre_substitution(
+inline void pre_substitution_tile(
     typename array3d<T, layout_left>::size_type j_begin
   , typename array3d<T, layout_left>::size_type j_end
   , array3d<T, layout_left> const& b           // Diagonal.
@@ -168,7 +168,7 @@ inline void pre_substitution(
 }
 
 template <typename T, typename F>
-inline void back_substitution(
+inline void back_substitution_tile(
     typename array3d<T, layout_left>::size_type j_begin
   , typename array3d<T, layout_left>::size_type j_end
   , array3d<T, layout_left> const& b           // Diagonal.
@@ -178,7 +178,7 @@ inline void back_substitution(
     ) noexcept TSB_ALWAYS_INLINE;
 
 template <typename T, typename F>
-inline void back_substitution(
+inline void back_substitution_tile(
     typename array3d<T, layout_left>::size_type j_begin
   , typename array3d<T, layout_left>::size_type j_end
   , array3d<T, layout_left> const& b           // Diagonal.

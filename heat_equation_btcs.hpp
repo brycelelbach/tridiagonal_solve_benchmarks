@@ -404,17 +404,17 @@ struct heat_equation_btcs_streaming_repeated_divide
 
             using namespace tsb::streaming;
 
-            forward_elimination(
+            forward_elimination_tile(
                 j_begin, j_end, this->A.a(), this->A.b(), this->A.c(), this->u
               , repeated_divide::forward_elimination_kernel<value_type, divider>
             );
 
-            pre_substitution(
+            pre_substitution_tile(
                 j_begin, j_end, this->A.b(), this->u
               , repeated_divide::pre_substitution_kernel<value_type, divider>
             );
 
-            back_substitution(
+            back_substitution_tile(
                 j_begin, j_end, this->A.b(), this->A.c(), this->u
               , repeated_divide::back_substitution_kernel<value_type, divider>
             );
@@ -481,22 +481,22 @@ struct heat_equation_btcs_streaming_cached_divide
 
             using namespace tsb::streaming;
 
-            pre_elimination(
+            pre_elimination_tile(
                 j_begin, j_end, this->A.b() 
               , cached_divide::pre_elimination_kernel<value_type, divider>
             );
 
-            forward_elimination(
+            forward_elimination_tile(
                 j_begin, j_end, this->A.a(), this->A.b(), this->A.c(), this->u
               , cached_divide::forward_elimination_kernel<value_type, divider>
             );
 
-            pre_substitution(
+            pre_substitution_tile(
                 j_begin, j_end, this->A.b(), this->u
               , cached_divide::pre_substitution_kernel<value_type>
             );
 
-            back_substitution(
+            back_substitution_tile(
                 j_begin, j_end, this->A.b(), this->A.c(), this->u
               , cached_divide::back_substitution_kernel<value_type>
             );
