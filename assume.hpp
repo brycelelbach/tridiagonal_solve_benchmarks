@@ -41,6 +41,18 @@ void assume_aligned_to_type(T* ptr) noexcept TSB_ALWAYS_INLINE;
     {
         __assume_aligned(ptr, sizeof(double));
     }
+
+    template <>
+    void assume_aligned_to_type(float const* ptr) noexcept
+    {
+        __assume_aligned(ptr, sizeof(float));
+    }
+
+    template <>
+    void assume_aligned_to_type(double const* ptr) noexcept
+    {
+        __assume_aligned(ptr, sizeof(double));
+    }
 #endif
 
 } // tsb
