@@ -36,7 +36,7 @@ struct rolling_matrix
         size_type tw
       , size_type array_base_align
       , size_type array_align_step
-      , size_type plane_pad
+      , size_type plane_padding
       , size_type nx, size_type ny, size_type nz
         ) noexcept
     {
@@ -52,19 +52,19 @@ struct rolling_matrix
             a_[tn].resize(
                 array_base_align + 1 * array_align_step
               , nx, tw, nz
-              , 0, plane_pad, 0
+              , 0, plane_padding, 0
             );
 
             b_[tn].resize(
                 array_base_align + 2 * array_align_step
               , nx, tw, nz
-              , 0, plane_pad, 0
+              , 0, plane_padding, 0
             );
 
             c_[tn].resize(
                 array_base_align + 3 * array_align_step
               , nx, tw, nz
-              , 0, plane_pad, 0
+              , 0, plane_padding, 0
             );
         }
     }

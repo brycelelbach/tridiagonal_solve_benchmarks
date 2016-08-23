@@ -19,11 +19,11 @@ enum align_policy_enum
 
   , use_array_base_align = TSB_BINARY(0001)
   , use_array_align_step = TSB_BINARY(0010)
-  , use_plane_pad        = TSB_BINARY(0100)
+  , use_plane_padding        = TSB_BINARY(0100)
 
   , use_all_align_policies = use_array_base_align
                            | use_array_align_step
-                           | use_plane_pad
+                           | use_plane_padding
 };
 
 } // tsb

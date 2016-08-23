@@ -32,7 +32,7 @@ struct full_matrix
         size_type tw
       , size_type array_base_align
       , size_type array_align_step
-      , size_type plane_pad
+      , size_type plane_padding
       , size_type nx, size_type ny, size_type nz
         ) noexcept
     {
@@ -42,19 +42,19 @@ struct full_matrix
         a_.resize(
             array_base_align + 1 * array_align_step
           , nx, ny, nz
-          , 0, plane_pad, 0
+          , 0, plane_padding, 0
         );
 
         b_.resize(
             array_base_align + 2 * array_align_step
           , nx, ny, nz
-          , 0, plane_pad, 0
+          , 0, plane_padding, 0
         );
 
         c_.resize(
             array_base_align + 3 * array_align_step
           , nx, ny, nz
-          , 0, plane_pad, 0
+          , 0, plane_padding, 0
         );
     }
 
