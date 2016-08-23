@@ -22,6 +22,17 @@ template <typename T>
 T get_env_variable(std::string const& var, T default_); 
 
 template <>
+std::string get_env_variable(std::string const& var, std::string default_) 
+{
+    char const* const env_str_p(std::getenv(var.c_str()));
+
+    if (nullptr == env_str_p)
+        return default_;
+
+    return std::string(env_str_p);
+}
+
+template <>
 bool get_env_variable(std::string const& var, bool default_) 
 {
     char const* const env_str_p(std::getenv(var.c_str()));
@@ -74,31 +85,6 @@ long get_env_variable(std::string const& var, long default_)
 }
 
 template <>
-double get_env_variable(std::string const& var, double default_) 
-{
-    char const* const env_str_p(std::getenv(var.c_str()));
-
-    if (nullptr == env_str_p)
-        return default_;
-
-    std::string const env_str(env_str_p);
-
-    char* env_str_p_end(nullptr);
-
-    double const r = std::strtod(env_str.c_str(), &env_str_p_end);
-
-    if ((&env_str.back() != env_str_p_end - 1) || HUGE_VAL == r)
-    {
-        std::cout << "ERROR: invalid value '" << env_str << "' "
-                     "for floating point environment variable '" << var << "'"
-                     "\n";
-        std::exit(1);
-    }
-
-    return r;
-}
-
-template <>
 float get_env_variable(std::string const& var, float default_) 
 {
     char const* const env_str_p(std::getenv(var.c_str()));
@@ -113,6 +99,31 @@ float get_env_variable(std::string const& var, float default_)
     float const r = std::strtof(env_str.c_str(), &env_str_p_end);
 
     if ((&env_str.back() != env_str_p_end - 1) || HUGE_VALF == r)
+    {
+        std::cout << "ERROR: invalid value '" << env_str << "' "
+                     "for floating point environment variable '" << var << "'"
+                     "\n";
+        std::exit(1);
+    }
+
+    return r;
+}
+
+template <>
+double get_env_variable(std::string const& var, double default_) 
+{
+    char const* const env_str_p(std::getenv(var.c_str()));
+
+    if (nullptr == env_str_p)
+        return default_;
+
+    std::string const env_str(env_str_p);
+
+    char* env_str_p_end(nullptr);
+
+    double const r = std::strtod(env_str.c_str(), &env_str_p_end);
+
+    if ((&env_str.back() != env_str_p_end - 1) || HUGE_VAL == r)
     {
         std::cout << "ERROR: invalid value '" << env_str << "' "
                      "for floating point environment variable '" << var << "'"

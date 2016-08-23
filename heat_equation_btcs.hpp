@@ -8,11 +8,9 @@
 #if !defined(TSB_384D4B17_47A4_4193_A7E6_35EBF37E47CA)
 #define TSB_384D4B17_47A4_4193_A7E6_35EBF37E47CA
 
-#include <iomanip>
 #include <algorithm>
 
 #include <cmath>
-#include <cstdio>
 #include <cstdint>
 
 #include <omp.h>
@@ -24,7 +22,7 @@
 #include "array3d.hpp"
 #include "full_matrix.hpp"
 #include "rolling_matrix.hpp"
-
+#include "printer.hpp"
 #include "copy.hpp"
 #include "max_residual.hpp"
 #include "l2_norm.hpp"
@@ -35,6 +33,8 @@
 #include "operator_divider.hpp"
 #include "nr_rcp_divider.hpp"
 #include "align_policies.hpp"
+
+#warning Update plane_pad -> plane_padding in scripts
 
 namespace tsb
 {
@@ -76,6 +76,8 @@ struct heat_equation_btcs : enable_fp_exceptions
                        // norm after each time step.
     bool const header; // If true, print the CSV header when printing results.
 
+    io::output_format_enum const output_format;
+
     size_type const  nx; // X dimension
     size_type const  ny; // Y dimension
     size_type const  nz; // Z dimension
@@ -85,7 +87,7 @@ struct heat_equation_btcs : enable_fp_exceptions
 
     size_type const array_base_align;
     size_type const array_align_step;
-    size_type const plane_pad;
+    size_type const plane_padding;
 
     size_type const ns;  // Number of time steps to take.
     value_type const dt; // Time step size.
@@ -104,11 +106,11 @@ struct heat_equation_btcs : enable_fp_exceptions
     void allocate_arrays()
     { 
         // Allocate storage for the problem state.
-        u.resize(array_base_align, nx, ny, nz, 0, plane_pad, 0);
+        u.resize(array_base_align, nx, ny, nz, 0, plane_padding, 0);
 
         // Allocate storage for the matrix.
         A.resize(
-            tw, array_base_align, array_align_step, plane_pad
+            tw, array_base_align, array_align_step, plane_padding
           , nx, ny, nz
         );
 
@@ -122,8 +124,8 @@ struct heat_equation_btcs : enable_fp_exceptions
         auto const array_align_step_ = ( ap & use_array_align_step
                                        ? array_align_step
                                        : 0);
-        auto const plane_pad_        = ( ap & use_plane_pad
-                                       ? plane_pad
+        auto const plane_padding_        = ( ap & use_plane_padding
+                                       ? plane_padding
                                        : 0);
 
         // Allocate storage for the residual.
@@ -153,6 +155,8 @@ struct heat_equation_btcs : enable_fp_exceptions
       : enable_fp_exceptions()
       , verify(get_env_variable<bool>("verify", false))
       , header(get_env_variable<bool>("header", false))
+      , output_format(io::output_format_from_string(
+            get_env_variable<std::string>("output_format", "bbb")))
       , nx(get_env_variable<size_type>("nx", 32))
       , ny(get_env_variable<size_type>("ny", 2048))
       , nz(get_env_variable<size_type>("nz", 32))
@@ -160,7 +164,7 @@ struct heat_equation_btcs : enable_fp_exceptions
       , dz(1.0 / (nz - 1))
       , array_base_align(get_env_variable<size_type>("array_base_align", 1 << 30))
       , array_align_step(get_env_variable<size_type>("array_align_step", 9216))
-      , plane_pad(get_env_variable<size_type>("plane_pad", 1152))
+      , plane_padding(get_env_variable<size_type>("plane_padding", 1152))
       , ns(get_env_variable<size_type>("ns", 50))
       , dt(get_env_variable<value_type>("dt", 1.0e-7))
       , D(get_env_variable<value_type>("D", 0.1))
@@ -188,7 +192,7 @@ struct heat_equation_btcs : enable_fp_exceptions
         TSB_ASSUME(0 == (ny % tw));
     }
 
-    void run()
+    void run() noexcept
     {
         allocate_arrays();
 
@@ -256,6 +260,8 @@ struct heat_equation_btcs : enable_fp_exceptions
                                      / (1 << 30))
                                    / solvertime;
 
+        std::string const bandwidth_units = std::string("GB/") + t.units();
+
         size_type const problem_size = ( sizeof(value_type)
                                        * ( (2.0 * nx * ny * nz)
                                          + (2.0 * nx * ny * (nz - 1))));
@@ -264,52 +270,82 @@ struct heat_equation_btcs : enable_fp_exceptions
                                     * ( (2.0 * nx * tw * nz)
                                       + (2.0 * nx * tw * (nz - 1))));
 
-        if (header)
-            std::cout <<
-                "Benchmark Variant,"
-                "Diffusion Coefficient (D),"
-                "X (Horizontal) Extent (nx),"
-                "Y (Horizontal) Extent (ny),"
-                "Z (Vertical) Extent (nz),"
-                "Problem Size [bytes],"
-                "Tile Width (tw),"
-                "Tile Size [bytes],"
-                "Array Base Align (bytes),"
-                "Array Align Step (bytes),"
-                "Plane Base Align (bytes),"
-                "# of Timesteps (ns),"
-                "Timestep Size (dt),"
-                "# of Threads,"
-                "Wall Time [" << t.units() << "],"
-                "Solver Time [" << t.units() << "],"
-                "Solver Bandwidth [GB/" << t.units() << "],"
-                "L2 Norm"
-                ;
+        std::string const name = ( derived().name() 
+                                 + ( std::is_same<value_type, double>::value
+                                   ? ".DOUBLE-PRECISION"
+                                   : ".SINGLE-PRECISION"));
 
-        std::cout
-            << derived().name()
-                << ( std::is_same<value_type, double>::value
-                   ? ".DOUBLE-PRECISION."
-                   : ".SINGLE-PRECISION.")
-                << TSB_BUILD_TYPE << ","
-            << D << ","
-            << nx << ","
-            << ny << ","
-            << nz << ","
-            << problem_size << ","
-            << tw << ","
-            << tile_size << ","
-            << array_base_align << ","
-            << array_align_step << ","
-            << plane_pad << ","
-            << ns << ","
-            << dt << ","
-            << omp_get_max_threads() << ","
-            << std::setprecision(7) << walltime << ","
-            << std::setprecision(7) << solvertime << ","
-            << std::setprecision(7) << bandwidth << ","
-            << std::setprecision(17) << l2 << "\n"
-            ;
+        using namespace io;
+
+        printer print(output_format);
+
+        print
+            ( control_variable,     "VAR",   "Benchmark Variant"
+            ,                                ""
+            , "%s", name.c_str())
+            ( control_variable,     "BUILD", "Build Type"
+            ,                                ""
+            , "%s", TSB_BUILD_TYPE)
+            ( control_variable,     "REV",   "Git Revision"
+            ,                                ""
+            , "%s", TSB_GIT_REVISION)
+            ( control_variable,     "D",     "Diffusion Coefficient (D)"
+            ,                                ""
+            , "%.7g", D)
+            ( control_variable,     "NX",    "X (Horizontal) Extent (nx)"
+            ,                                "points"
+            , "%u", nx) 
+            ( independent_variable, "NY",    "Y (Horizontal) Extent (ny)"
+            ,                                "points"
+            , "%u", ny) 
+            ( control_variable,     "NZ",    "Z (Horizontal) Extent (nz)"
+            ,                                "points"
+            , "%u", nz) 
+            ( independent_variable, "PSIZE", "Problem Size"
+            ,                                "bytes"
+            , "%u", problem_size) 
+            ( independent_variable, "TW",    "Tile Width (tw)"
+            ,                                "nx*ny planes"
+            , "%u", problem_size) 
+            ( independent_variable, "TSIZE", "Tile Size"
+            ,                                "bytes"
+            , "%u", tile_size) 
+            ( control_variable,     "BALGN", "Array Base Align"
+            ,                                "bytes"
+            , "%u", array_base_align) 
+            ( control_variable,     "ALGNS", "Array Align Step"
+            ,                                "bytes"
+            , "%u", array_align_step) 
+            ( control_variable,     "PPAD",  "Plane Padding"
+            ,                                "bytes"
+            , "%u", plane_padding) 
+            ( independent_variable, "NS",    "# of Timesteps (ns)"
+            ,                                "steps"
+            , "%u", ns) 
+            ( control_variable,     "DT",    "Timestep Size (dt)"
+            ,                                ""
+            , "%.7g", dt) 
+            ( independent_variable, "PUS",   "# of Processing Units"
+            ,                                "PUs"
+            , "%u", ::omp_get_max_threads()) 
+            ( dependent_variable,   "WTIME", "Total Wall Time"
+            ,                                t.units()
+            , "%.7g", walltime) 
+            ( dependent_variable,   "STIME", "Solver Wall Time"
+            ,                                t.units()
+            , "%.7g", solvertime) 
+            ( dependent_variable,   "BW",    "Solver Bandwidth"
+            ,                                bandwidth_units
+            , "%.7g", bandwidth) 
+            ( independent_variable, "L2",    "L2 Norm"
+            ,                                ""
+            , "%.17g", l2) 
+        ;
+
+        if (header)
+            print.output_headers();
+
+        print.output_values();
     }
 };
 
@@ -446,7 +482,7 @@ struct heat_equation_btcs_full_matrix_streaming_repeated_divide
             auto const j_begin = j;
             auto const j_end   = j + this->tw;
 
-            using namespace tsb::streaming;
+            using namespace streaming;
 
             build_matrix_tile(
                 j_begin, j_end, this->A_coef
@@ -529,7 +565,7 @@ struct heat_equation_btcs_full_matrix_streaming_cached_divide
             auto const j_begin = j;
             auto const j_end   = j + this->tw;
 
-            using namespace tsb::streaming;
+            using namespace streaming;
 
             build_matrix_tile(
                 j_begin, j_end, this->A_coef
@@ -614,7 +650,7 @@ struct heat_equation_btcs_full_matrix_mkl_z_contiguous
             auto const j_begin = j;
             auto const j_end   = j + this->tw;
 
-            using namespace tsb::mkl;
+            using namespace mkl;
 
             build_matrix_tile(
                 j_begin, j_end, this->A_coef
@@ -686,7 +722,7 @@ struct heat_equation_btcs_rolling_matrix_streaming_repeated_divide
 
             auto const tn = ::omp_get_thread_num();
 
-            using namespace tsb::streaming;
+            using namespace streaming;
 
             build_matrix_tile(
                 0, this->tw, this->A_coef
@@ -775,7 +811,7 @@ struct heat_equation_btcs_rolling_matrix_streaming_cached_divide
 
             auto const tn = ::omp_get_thread_num();
 
-            using namespace tsb::streaming;
+            using namespace streaming;
 
             build_matrix_tile(
                 0, this->tw, this->A_coef
@@ -867,7 +903,7 @@ struct heat_equation_btcs_rolling_matrix_mkl_z_contiguous
 
             auto const tn = ::omp_get_thread_num();
 
-            using namespace tsb::mkl;
+            using namespace mkl;
 
             build_matrix_tile(
                 0, this->tw, this->A_coef
@@ -902,8 +938,8 @@ struct solver_traits<
 
     using timer = Timer; 
 
-    static align_policy_enum constexpr align_policy = 
-        align_policy_enum(use_array_base_align | use_array_align_step);
+    static align_policy_enum constexpr align_policy
+        = align_policy_enum(use_array_base_align | use_array_align_step);
 };
 
 } // tsb

@@ -68,7 +68,9 @@ endif
 # Disable icpc warning #2261: __assume expression with side effects discarded
 CXXFLAGS+=-wd2261
 
-CXXFLAGS+=-std=c++11 -qopenmp -DTSB_BUILD_TYPE=\"$(BUILD_TYPE)\"
+CXXFLAGS+=-std=c++11 -qopenmp
+CXXFLAGS+=-DTSB_BUILD_TYPE=\"$(BUILD_TYPE)\"
+CXXFLAGS+=-DTSB_GIT_REVISION=\"$(shell git rev-parse --short HEAD)\"
 
 # We disable IPO because ICPC dumps ~500k of raw IPO data into the assembly
 # files otherwise.
