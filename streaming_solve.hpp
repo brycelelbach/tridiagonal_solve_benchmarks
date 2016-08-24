@@ -355,6 +355,7 @@ inline void forward_elimination_kernel(
 {
     auto constexpr div = Divider();
 
+    // NOTE: a[] starts at a[1], so a[k - 1] is really a[k]
     // T const m0 = a[k - 1] / b[k - 1];
     // b[k] -= m0 * c[k - 1];
     // u[k] -= m0 * u[k - 1];
@@ -448,8 +449,9 @@ inline void forward_elimination_kernel(
 {
     auto constexpr div = Divider();
 
+    // NOTE: a[] starts at a[1], so a[k - 1] is really a[k]
     // T const m0 = a[k - 1] * b^-1[k - 1];
-    // b[k] = 1.0 / (b[k] - m0 * c[k - 1]);
+    // b^-1[k] = 1.0 / (b[k] - m0 * c[k - 1]);
     // u[k] = u[k] - m0 * u[k - 1];
     T const m0 = asub1p * bsub1p;
     T const b0 = div(1.0, (bp - m0 * csub1p));
