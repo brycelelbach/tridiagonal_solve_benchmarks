@@ -36,10 +36,6 @@
 #include "nr_rcp_divider.hpp"
 #include "align_policies.hpp"
 
-#warning Do chunking for step()'s parallel for manually and go back to per-thread timing
-
-#warning Lift build_matrix and combine *_rolling_matrix and *_full_matrix solver base classes
-
 namespace tsb
 {
 
@@ -532,6 +528,167 @@ struct solver_traits<
 
 template <
     typename T
+  , typename Divider = operator_divider<T>
+  , typename Timer   = high_resolution_timer
+    >
+struct heat_equation_btcs_ikj_streaming_repeated_divide
+  : heat_equation_btcs_full_matrix<
+        heat_equation_btcs_ikj_streaming_repeated_divide<
+            T, Divider, Timer
+        >
+    >
+{
+    using base_type = heat_equation_btcs_full_matrix<
+        heat_equation_btcs_ikj_streaming_repeated_divide<
+            T, Divider, Timer
+        >
+    >;
+
+    using divider = Divider;
+
+    using size_type  = typename base_type::size_type;
+    using value_type = typename base_type::value_type;
+
+    void step(size_type s) noexcept
+    {
+        #pragma omp parallel for schedule(static)
+        for (int j = 0; j < this->ny; j += this->tw)
+        {
+            auto const j_begin = j;
+            auto const j_end   = j + this->tw;
+
+            using namespace tsb::streaming;
+
+            forward_elimination_tile(
+                j_begin, j_end, this->A.a(), this->A.b(), this->A.c(), this->u
+              , repeated_divide::forward_elimination_kernel<value_type, divider>
+            );
+
+            pre_substitution_tile(
+                j_begin, j_end, this->A.b(), this->u
+              , repeated_divide::pre_substitution_kernel<value_type, divider>
+            );
+
+            back_substitution_tile(
+                j_begin, j_end, this->A.b(), this->A.c(), this->u
+              , repeated_divide::back_substitution_kernel<value_type, divider>
+            );
+        }
+    }
+
+    static std::string name() noexcept
+    {
+        return std::string("STREAMING.IKJ.REPEATED-") + divider::name();
+    }
+};
+
+template <
+    typename T
+  , typename Divider
+  , typename Timer
+    >
+struct solver_traits<
+    heat_equation_btcs_full_matrix<
+        heat_equation_btcs_ikj_streaming_repeated_divide<
+            T, Divider, Timer
+        >
+    >
+> {
+    using matrix = full_matrix<T, layout_ikj>;
+
+    using timer = Timer; 
+
+    static align_policy_enum constexpr align_policy
+        = align_policy_enum(use_array_base_align | use_array_align_step);
+};
+
+///////////////////////////////////////////////////////////////////////////////
+
+template <
+    typename T
+  , typename Divider = operator_divider<T>
+  , typename Timer   = high_resolution_timer
+    >
+struct heat_equation_btcs_ikj_streaming_cached_divide
+  : heat_equation_btcs_full_matrix<
+        heat_equation_btcs_ikj_streaming_cached_divide<
+            T, Divider, Timer
+        >
+    >
+{
+    using base_type = heat_equation_btcs_full_matrix<
+        heat_equation_btcs_ikj_streaming_cached_divide<
+            T, Divider, Timer
+        >
+    >;
+
+    using size_type  = typename base_type::size_type;
+    using value_type = typename base_type::value_type;
+
+    using divider = Divider;
+
+    void step(size_type s) noexcept
+    {
+        #pragma omp parallel for schedule(static)
+        for (int j = 0; j < this->ny; j += this->tw)
+        {
+            auto const j_begin = j;
+            auto const j_end   = j + this->tw;
+
+            using namespace tsb::streaming;
+
+            pre_elimination_tile(
+                j_begin, j_end, this->A.b() 
+              , cached_divide::pre_elimination_kernel<value_type, divider>
+            );
+
+            forward_elimination_tile(
+                j_begin, j_end, this->A.a(), this->A.b(), this->A.c(), this->u
+              , cached_divide::forward_elimination_kernel<value_type, divider>
+            );
+
+            pre_substitution_tile(
+                j_begin, j_end, this->A.b(), this->u
+              , cached_divide::pre_substitution_kernel<value_type>
+            );
+
+            back_substitution_tile(
+                j_begin, j_end, this->A.b(), this->A.c(), this->u
+              , cached_divide::back_substitution_kernel<value_type>
+            );
+        }
+    }
+
+    static std::string name() noexcept
+    {
+        return std::string("STREAMING.IKJ.CACHED-") + divider::name();
+    }
+};
+
+template <
+    typename T
+  , typename Divider
+  , typename Timer
+    >
+struct solver_traits<
+    heat_equation_btcs_full_matrix<
+        heat_equation_btcs_ikj_streaming_cached_divide<
+            T, Divider, Timer
+        >
+    >
+> {
+    using matrix = full_matrix<T, layout_ikj>;
+
+    using timer = Timer; 
+
+    static align_policy_enum constexpr align_policy
+        = align_policy_enum(use_array_base_align | use_array_align_step);
+};
+
+///////////////////////////////////////////////////////////////////////////////
+
+template <
+    typename T
   , typename Timer = high_resolution_timer
     >
 struct heat_equation_btcs_mkl_z_contiguous_full_matrix
@@ -560,7 +717,7 @@ struct heat_equation_btcs_mkl_z_contiguous_full_matrix
 
             using namespace tsb::mkl;
 
-            solve(
+            solve_tile(
                 j_begin, j_end, this->A.a(), this->A.b(), this->A.c(), this->u
             );
         }

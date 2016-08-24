@@ -226,6 +226,213 @@ inline void back_substitution_tile(
 
 ///////////////////////////////////////////////////////////////////////////////
 
+template <typename T, typename F>
+inline void pre_elimination_tile(
+    typename array3d<T, layout_ikj>::size_type j_begin
+  , typename array3d<T, layout_ikj>::size_type j_end
+  , array3d<T, layout_ikj>& b                 // Diagonal.
+  , F f
+    ) noexcept TSB_ALWAYS_INLINE;
+
+template <typename T, typename F>
+inline void pre_elimination_tile(
+    typename array3d<T, layout_ikj>::size_type j_begin
+  , typename array3d<T, layout_ikj>::size_type j_end
+  , array3d<T, layout_ikj>& b                 // Diagonal.
+  , F f
+    ) noexcept
+{
+    auto const nx = b.nx();
+
+    TSB_ASSUME(0 == (nx % 16)); // Assume unit stride is divisible by 16.
+
+    // Pre-Elimination: (j_end - j_begin) * (nx) iterations
+    for (auto j = j_begin; j < j_end; ++j)
+    {
+        T* __restrict__ bbeginp = b(_, j, 0);
+
+        TSB_ASSUME_ALIGNED(bbeginp, 64);
+
+        #pragma simd
+        for (auto i = 0; i < nx; ++i)
+        {
+            f(bbeginp[i]);
+        }
+    }
+}
+
+template <typename T, typename F>
+inline void forward_elimination_tile(
+    typename array3d<T, layout_ikj>::size_type j_begin
+  , typename array3d<T, layout_ikj>::size_type j_end
+  , array3d<T, layout_ikj> const& a           // Lower band.
+  , array3d<T, layout_ikj>& b                 // Diagonal.
+  , array3d<T, layout_ikj> const& c           // Upper band.
+  , array3d<T, layout_ikj>& u                 // Solution.
+  , F f
+    ) noexcept TSB_ALWAYS_INLINE;
+
+template <typename T, typename F>
+inline void forward_elimination_tile(
+    typename array3d<T, layout_ikj>::size_type j_begin
+  , typename array3d<T, layout_ikj>::size_type j_end
+  , array3d<T, layout_ikj> const& a           // Lower band.
+  , array3d<T, layout_ikj>& b                 // Diagonal.
+  , array3d<T, layout_ikj> const& c           // Upper band.
+  , array3d<T, layout_ikj>& u                 // Solution.
+  , F f
+    ) noexcept
+{
+    auto const nx = u.nx();
+    auto const nz = u.nz();
+
+    TSB_ASSUME(0 == (nx % 16)); // Assume unit stride is divisible by 16.
+
+    TSB_ASSUME(u.nx() == a.nx());
+    TSB_ASSUME(u.nz() == a.nz());
+
+    TSB_ASSUME(u.nx() == b.nx());
+    TSB_ASSUME(u.nz() == b.nz());
+
+    TSB_ASSUME(u.nx() == c.nx());
+    TSB_ASSUME(u.nz() == c.nz());
+
+    // Forward Elimination: (nz - 1) * (j_end - j_begin) * (nx) iterations
+    for (auto j = j_begin; j < j_end; ++j)
+        for (auto k = 1; k < nz; ++k)
+        {
+            T const* __restrict__ asub1p = a(_, j, k - 1);
+
+            T const* __restrict__ bsub1p = b(_, j, k - 1);
+            T* __restrict__       bp     = b(_, j, k);
+
+            T const* __restrict__ csub1p = c(_, j, k - 1);
+
+            T const* __restrict__ usub1p = u(_, j, k - 1);
+            T* __restrict__       up     = u(_, j, k);
+
+            TSB_ASSUME_ALIGNED(asub1p, 64);
+
+            TSB_ASSUME_ALIGNED(bsub1p, 64);
+            TSB_ASSUME_ALIGNED(bp,     64);
+
+            TSB_ASSUME_ALIGNED(csub1p, 64);
+
+            TSB_ASSUME_ALIGNED(usub1p, 64);
+            TSB_ASSUME_ALIGNED(up,     64);
+
+            #pragma simd
+            for (auto i = 0; i < nx; ++i)
+            {
+                f(asub1p[i], bsub1p[i], bp[i], csub1p[i], usub1p[i], up[i]);
+            }
+        }
+}
+
+template <typename T, typename F>
+inline void pre_substitution_tile(
+    typename array3d<T, layout_ikj>::size_type j_begin
+  , typename array3d<T, layout_ikj>::size_type j_end
+  , array3d<T, layout_ikj> const& b           // Diagonal.
+  , array3d<T, layout_ikj>& u                 // Solution.
+  , F f
+    ) noexcept TSB_ALWAYS_INLINE;
+
+template <typename T, typename F>
+inline void pre_substitution_tile(
+    typename array3d<T, layout_ikj>::size_type j_begin
+  , typename array3d<T, layout_ikj>::size_type j_end
+  , array3d<T, layout_ikj> const& b           // Diagonal.
+  , array3d<T, layout_ikj>& u                 // Solution.
+  , F f
+    ) noexcept
+{
+    auto const nx = u.nx();
+    auto const nz = u.nz();
+
+    TSB_ASSUME(0 == (nx % 16)); // Assume unit stride is divisible by 16.
+
+    TSB_ASSUME(u.nx() == b.nx());
+    TSB_ASSUME(u.nz() == b.nz());
+
+    // Pre-Substitution: (j_end - j_begin) * (nx) iterations
+    for (auto j = j_begin; j < j_end; ++j)
+    {
+        T const* __restrict__ bendp = b(_, j, nz - 1);
+
+        T* __restrict__       uendp = u(_, j, nz - 1);
+
+        TSB_ASSUME_ALIGNED(bendp, 64);
+
+        TSB_ASSUME_ALIGNED(uendp, 64);
+
+        #pragma simd
+        for (auto i = 0; i < nx; ++i)
+        {
+            f(bendp[i], uendp[i]);
+        }
+    }
+}
+
+template <typename T, typename F>
+inline void back_substitution_tile(
+    typename array3d<T, layout_ikj>::size_type j_begin
+  , typename array3d<T, layout_ikj>::size_type j_end
+  , array3d<T, layout_ikj> const& b           // Diagonal.
+  , array3d<T, layout_ikj> const& c           // Upper band.
+  , array3d<T, layout_ikj>& u                 // Solution.
+  , F f
+    ) noexcept TSB_ALWAYS_INLINE;
+
+template <typename T, typename F>
+inline void back_substitution_tile(
+    typename array3d<T, layout_ikj>::size_type j_begin
+  , typename array3d<T, layout_ikj>::size_type j_end
+  , array3d<T, layout_ikj> const& b           // Diagonal.
+  , array3d<T, layout_ikj> const& c           // Upper band.
+  , array3d<T, layout_ikj>& u                 // Solution.
+  , F f
+    ) noexcept
+{
+    auto const nx = u.nx();
+    auto const nz = u.nz();
+
+    TSB_ASSUME(0 == (nx % 16)); // Assume unit stride is divisible by 16.
+
+    TSB_ASSUME(u.nx() == b.nx());
+    TSB_ASSUME(u.nz() == b.nz());
+
+    TSB_ASSUME(u.nx() == c.nx());
+    TSB_ASSUME(u.nz() == c.nz());
+ 
+    // Back Substitution: (nz - 1) * (j_end - j_begin) * (nx) iterations
+    for (auto j = j_begin; j < j_end; ++j)
+        for (auto k = nz - 2; k >= 0; --k)
+        {
+            T const* __restrict__ bp     = b(_, j, k);
+
+            T const* __restrict__ cp     = c(_, j, k);
+
+            T* __restrict__       up     = u(_, j, k);
+            T const* __restrict__ uadd1p = u(_, j, k + 1);
+
+            TSB_ASSUME_ALIGNED(bp, 64);
+
+            TSB_ASSUME_ALIGNED(cp, 64);
+
+            TSB_ASSUME_ALIGNED(up, 64);
+            TSB_ASSUME_ALIGNED(uadd1p, 64);
+
+            #pragma simd
+            for (auto i = 0; i < nx; ++i)
+            {
+                f(bp[i], cp[i], up[i], uadd1p[i]);
+            }
+        }
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
 namespace repeated_divide {
 
 template <typename T, typename Divider = std::divides<T> >

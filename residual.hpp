@@ -321,6 +321,152 @@ inline void residual_tile(
     }
 } // }}}
 
+///////////////////////////////////////////////////////////////////////////////
+
+template <typename T>
+inline void residual_tile(
+    typename array3d<T, layout_ikj>::size_type j_begin
+  , typename array3d<T, layout_ikj>::size_type j_end
+  , array3d<T, layout_ikj>& r       // Residual
+  , array3d<T, layout_ikj> const& a // Lower band
+  , array3d<T, layout_ikj> const& b // Diagonal
+  , array3d<T, layout_ikj> const& c // Upper band
+  , array3d<T, layout_ikj> const& u // Solution
+    ) noexcept TSB_ALWAYS_INLINE;
+
+template <typename T>
+inline void residual_tile(
+    typename array3d<T, layout_ikj>::size_type j_begin
+  , typename array3d<T, layout_ikj>::size_type j_end
+  , array3d<T, layout_ikj>& r       // Residual
+  , array3d<T, layout_ikj> const& a // Lower band
+  , array3d<T, layout_ikj> const& b // Diagonal
+  , array3d<T, layout_ikj> const& c // Upper band
+  , array3d<T, layout_ikj> const& u // Solution
+    ) noexcept
+{ // {{{
+    auto const nx = b.nx();
+    auto const nz = b.nz();
+
+    TSB_ASSUME(0 == (nx % 16)); // Assume unit stride is divisible by 16.
+
+    TSB_ASSUME(r.nx() == a.nx());
+    TSB_ASSUME(r.nz() == a.nz());
+
+    TSB_ASSUME(r.nx() == b.nx());
+    TSB_ASSUME(r.nz() == b.nz());
+
+    TSB_ASSUME(r.nx() == c.nx());
+    TSB_ASSUME(r.nz() == c.nz());
+
+    TSB_ASSUME(r.nx() == u.nx());
+    TSB_ASSUME(r.nz() == u.nz());
+
+    // First row.
+    for (auto j = j_begin; j < j_end; ++j)
+    {
+        T* __restrict__       r0p = r(_, j, 0);
+
+        T const* __restrict__ b0p = b(_, j, 0);
+
+        T const* __restrict__ c0p = c(_, j, 0);
+
+        T const* __restrict__ u0p = u(_, j, 0);
+        T const* __restrict__ u1p = u(_, j, 1);
+
+        TSB_ASSUME_ALIGNED(r0p, 64);
+
+        TSB_ASSUME_ALIGNED(b0p, 64);
+
+        TSB_ASSUME_ALIGNED(c0p, 64);
+
+        TSB_ASSUME_ALIGNED(u0p, 64);
+        TSB_ASSUME_ALIGNED(u1p, 64);
+
+        #pragma simd
+        for (auto i = 0; i < nx; ++i)
+        {
+            // NOTE: The comment is k-indexed. The code is i-indexed.
+            // r[0] = (b[0] * u[0] + c[0] * u[1]) - r[0];
+            r0p[i] = (b0p[i] * u0p[i] + c0p[i] * u1p[i]) - r0p[i];
+        }
+    }
+
+    // Interior rows.
+    for (auto j = j_begin; j < j_end; ++j)
+        for (auto k = 1; k < nz - 1; ++k)
+        {
+            T* __restrict__       rp     = r(_, j, k);
+
+            T const* __restrict__ asub1p = a(_, j, k - 1);
+
+            T const* __restrict__ bp     = b(_, j, k);
+
+            T const* __restrict__ cp     = c(_, j, k);
+
+            T const* __restrict__ usub1p = u(_, j, k - 1);
+            T const* __restrict__ up     = u(_, j, k);
+            T const* __restrict__ uadd1p = u(_, j, k + 1);
+
+            TSB_ASSUME_ALIGNED(rp, 64);
+
+            TSB_ASSUME_ALIGNED(asub1p, 64);
+
+            TSB_ASSUME_ALIGNED(bp, 64);
+
+            TSB_ASSUME_ALIGNED(cp, 64);
+
+            TSB_ASSUME_ALIGNED(usub1p, 64);
+            TSB_ASSUME_ALIGNED(up, 64);
+            TSB_ASSUME_ALIGNED(uadd1p, 64);
+
+            #pragma simd
+            for (auto i = 0; i < nx; ++i)
+            {
+                // r[k] = ( a[k - 1] * u[k - 1]
+                //        + b[k] * u[k]
+                //        + c[k] * u[k + 1])
+                //      - r[k];
+                rp[i] = ( asub1p[i] * usub1p[i]
+                        + bp[i] * up[i]
+                        + cp[i] * uadd1p[i])
+                      - rp[i];
+            }
+        }
+
+    // Last row.
+    for (auto j = j_begin; j < j_end; ++j)
+    {
+        T* __restrict__       rnz1p = r(_, j, nz - 1);
+
+        T const* __restrict__ anz2p = a(_, j, nz - 2);
+
+        T const* __restrict__ bnz1p = b(_, j, nz - 1);
+
+        T const* __restrict__ unz2p = u(_, j, nz - 2);
+        T const* __restrict__ unz1p = u(_, j, nz - 1);
+
+        TSB_ASSUME_ALIGNED(rnz1p, 64);
+
+        TSB_ASSUME_ALIGNED(anz2p, 64);
+
+        TSB_ASSUME_ALIGNED(bnz1p, 64);
+
+        TSB_ASSUME_ALIGNED(unz2p, 64);
+        TSB_ASSUME_ALIGNED(unz1p, 64);
+
+        #pragma simd
+        for (auto i = 0; i < nx; ++i)
+        {
+            // NOTE: The comment is k-indexed. The code is i-indexed.
+            // r[nz - 1] = (a[nz - 2] * u[nz - 2] + b[nz - 1] * u[nz - 1])
+            //           - r[nz - 1];
+            rnz1p[i] = (anz2p[i] * unz2p[i] + bnz1p[i] * unz1p[i])
+                     - rnz1p[i];
+        }
+    }
+} // }}}
+
 } // tsb
 
 #endif // TSB_27F35FCA_6FAA_48D2_8E99_8E7B386841F5

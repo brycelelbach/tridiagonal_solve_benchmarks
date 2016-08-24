@@ -117,6 +117,42 @@ void set_initial_conditions_tile(
         }
 } // }}}
 
+///////////////////////////////////////////////////////////////////////////////
+
+template <typename T, typename InitialConditions>
+void set_initial_conditions_tile(
+    typename array3d<T, layout_ikj>::size_type j_begin
+  , typename array3d<T, layout_ikj>::size_type j_end
+  , array3d<T, layout_ikj>& u // Solution
+  , InitialConditions&& ics
+    ) noexcept TSB_ALWAYS_INLINE;
+
+template <typename T, typename InitialConditions>
+void set_initial_conditions_tile(
+    typename array3d<T, layout_ikj>::size_type j_begin
+  , typename array3d<T, layout_ikj>::size_type j_end
+  , array3d<T, layout_ikj>& u // Solution
+  , InitialConditions&& ics
+    ) noexcept
+{ // {{{
+    auto const nx = u.nx();
+    auto const nz = u.nz();
+
+    TSB_ASSUME(0 == (nx % 16)); // Assume unit stride is divisible by 16.
+
+    for (auto j = j_begin; j < j_end; ++j)
+        for (auto k = 0; k < nz; ++k)
+        {
+            T* __restrict__ up = u(_, j, k);
+
+            TSB_ASSUME_ALIGNED(up, 64);
+
+            #pragma simd
+            for (auto i = 0; i < nx; ++i)
+                up[i] = ics(k);
+        }
+} // }}}
+
 } // tsb
 
 #endif // TSB_FE674664_DBCF_40FD_A5C0_EECCA0FBE78F

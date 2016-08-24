@@ -193,6 +193,93 @@ struct layout_right
     }
 };
 
+struct layout_ikj
+{
+    using size_type = std::ptrdiff_t;
+
+  private:
+    size_type nx_, ny_, nz_;
+    size_type px_, py_, pz_;
+
+  public:
+    constexpr layout_ikj() noexcept
+      : nx_(0), ny_(0), nz_(0), px_(0), py_(0), pz_(0)
+    {}
+
+    constexpr layout_ikj(
+        size_type nx, size_type ny, size_type nz
+        ) noexcept
+      : nx_(nx), ny_(ny), nz_(nz), px_(0), py_(0), pz_(0)
+    {}
+
+    constexpr layout_ikj(
+        size_type nx, size_type ny, size_type nz
+      , size_type px, size_type py, size_type pz
+        ) noexcept
+      : nx_(nx), ny_(ny), nz_(nz), px_(px), py_(py), pz_(pz)
+    {}
+
+    constexpr size_type operator()(
+        size_type i, size_type j, size_type k
+        ) const noexcept
+    {
+        return stride_x() * i + stride_y() * j + stride_z() * k;
+    }
+    constexpr size_type operator()(
+        placeholder, size_type j, size_type k
+        ) const noexcept
+    {
+        return stride_y() * j + stride_z() * k;
+    }
+    constexpr size_type operator()(
+        size_type i, placeholder, size_type k
+        ) const noexcept
+    {
+        return stride_x() * i + stride_z() * k;
+    }
+    constexpr size_type operator()(
+        size_type i, size_type j, placeholder
+        ) const noexcept
+    {
+        return stride_x() * i + stride_y() * j;
+    }    
+
+    constexpr size_type stride_x() const noexcept
+    {
+        return 1;
+    }
+    constexpr size_type stride_y() const noexcept
+    {
+        return (((nx_ + px_) * nz_) + pz_);
+    }
+    constexpr size_type stride_z() const noexcept
+    {
+        return (nx_ + px_);
+    }
+
+    constexpr size_type nx() const noexcept
+    {
+        return nx_;
+    }
+    constexpr size_type ny() const noexcept
+    {
+        return ny_;
+    }
+    constexpr size_type nz() const noexcept
+    {
+        return nz_;
+    }
+
+    constexpr size_type span() const noexcept
+    {
+        return (nx_ * ny_ * nz_)
+             + stride_x() * px_  
+             + stride_y() * py_ 
+             + stride_z() * pz_
+            ;  
+    }
+};
+
 template <typename T, typename Layout>
 struct array3d
 {

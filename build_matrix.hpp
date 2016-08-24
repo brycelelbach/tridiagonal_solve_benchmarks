@@ -202,6 +202,80 @@ inline void build_matrix_tile(
     }
 } // }}}
 
+///////////////////////////////////////////////////////////////////////////////
+
+template <typename T>
+inline void build_matrix_tile(
+    typename array3d<T, layout_ikj>::size_type j_begin
+  , typename array3d<T, layout_ikj>::size_type j_end
+  , T A_coef
+  , array3d<T, layout_ikj>& a // Lower band
+  , array3d<T, layout_ikj>& b // Diagonal
+  , array3d<T, layout_ikj>& c // Upper band
+    ) noexcept TSB_ALWAYS_INLINE;
+
+template <typename T>
+inline void build_matrix_tile(
+    typename array3d<T, layout_ikj>::size_type j_begin
+  , typename array3d<T, layout_ikj>::size_type j_end
+  , T A_coef
+  , array3d<T, layout_ikj>& a // Lower band
+  , array3d<T, layout_ikj>& b // Diagonal
+  , array3d<T, layout_ikj>& c // Upper band
+    ) noexcept
+{ // {{{
+    auto const nx = b.nx();
+    auto const nz = b.nz();
+
+    T const ac_term = -A_coef;
+    T const b_term  = 1.0 + 2.0 * A_coef;
+
+    TSB_ASSUME(0 == (nx % 16)); // Assume unit stride is divisible by 16.
+
+    for (auto j = j_begin; j < j_end; ++j)
+        for (auto k = 1; k < nz - 1; ++k)
+        {
+            T* __restrict__ ap = a(_, j, k - 1);
+            T* __restrict__ bp = b(_, j, k);
+            T* __restrict__ cp = c(_, j, k);
+
+            TSB_ASSUME_ALIGNED(ap, 64);
+            TSB_ASSUME_ALIGNED(bp, 64);
+            TSB_ASSUME_ALIGNED(cp, 64);
+
+            #pragma simd
+            for (int i = 0; i < nx; ++i)
+            {
+                ap[i] = ac_term;
+                bp[i] = b_term;
+                cp[i] = ac_term;
+            }
+        }
+
+    // Boundary conditions.
+    for (auto j = j_begin; j < j_end; ++j)
+    {
+        T* __restrict__ bbeginp = b(_, j, 0);
+        T* __restrict__ cbeginp = c(_, j, 0);
+
+        T* __restrict__ aendp   = a(_, j, nz - 2);
+        T* __restrict__ bendp   = b(_, j, nz - 1);
+
+        TSB_ASSUME_ALIGNED(bbeginp, 64);
+        TSB_ASSUME_ALIGNED(cbeginp, 64);
+
+        TSB_ASSUME_ALIGNED(aendp, 64);
+        TSB_ASSUME_ALIGNED(bendp, 64);
+
+        #pragma simd
+        for (auto i = 0; i < nx; ++i)
+        {
+            bbeginp[i] = 1.0; cbeginp[i] = 0.0;
+            aendp[i]   = 0.0; bendp[i]   = 1.0;
+        }
+    }
+} // }}}
+
 } // tsb
 
 #endif // TSB_4D7778C5_461A_412C_81EA_40CA5280ABB5

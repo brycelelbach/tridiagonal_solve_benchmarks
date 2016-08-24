@@ -153,6 +153,65 @@ inline T max_residual_tile(
     return mr;
 } // }}}
 
+///////////////////////////////////////////////////////////////////////////////
+
+// NOTE: Identical to layout_left version
+template <typename T>
+inline T max_residual_tile(
+    typename array3d<T, layout_ikj>::size_type j_begin
+  , typename array3d<T, layout_ikj>::size_type j_end
+  , array3d<T, layout_ikj>& r       // Residual
+  , array3d<T, layout_ikj> const& a // Lower band
+  , array3d<T, layout_ikj> const& b // Diagonal
+  , array3d<T, layout_ikj> const& c // Upper band
+  , array3d<T, layout_ikj> const& u // Solution
+    ) noexcept
+{ // {{{
+    auto const nx = b.nx();
+    auto const nz = b.nz();
+
+    residual_tile(j_begin, j_end, r, a, b, c, u);
+
+    T mr = 0.0; 
+
+    TSB_ASSUME(0 == (nx % 16)); // Assume unit stride is divisible by 16.
+
+    for (auto j = j_begin; j < j_end; ++j)
+        for (auto i = 0; i < nx; ++i)
+        {
+            T min = std::numeric_limits<T>::max();
+            T max = std::numeric_limits<T>::min();
+
+            T const* __restrict__ rp = r(i, j, _);
+
+            auto const stride = r.stride_z();
+
+            TSB_ASSUME_ALIGNED_TO_TYPE(rp);
+
+            // NOTE: Strided access.
+            #pragma simd
+            for (auto k = 0; k < nz; ++k)
+            {
+                auto const ks = k * stride;
+
+                min = std::min(min, rp[ks]);
+                max = std::max(max, rp[ks]);
+            }
+
+            T const mr_here = std::max(std::fabs(min), std::fabs(max));
+
+            if ((0 == i) && (0 == j))
+                // First iteration, so we have nothing to compare against.
+                mr = mr_here;
+            else
+                // All the columns are the same, so the max residual for
+                // each column should be the same.
+                TSB_ASSUME(fp_equals(mr, mr_here));
+        }
+
+    return mr;
+} // }}}
+
 } // tsb
 
 #endif // TSB_F50DCB2B_69E6_4867_8160_5D41D27CCA7D

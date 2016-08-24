@@ -129,6 +129,48 @@ inline void copy_tile(
         }
 } // }}}
 
+///////////////////////////////////////////////////////////////////////////////
+
+template <typename T>
+inline void copy_tile(
+    typename array3d<T, layout_ikj>::size_type j_begin
+  , typename array3d<T, layout_ikj>::size_type j_end
+  , array3d<T, layout_ikj>& dest
+  , array3d<T, layout_ikj> const& src
+    ) noexcept TSB_ALWAYS_INLINE;
+
+template <typename T>
+inline void copy_tile(
+    typename array3d<T, layout_ikj>::size_type j_begin
+  , typename array3d<T, layout_ikj>::size_type j_end
+  , array3d<T, layout_ikj>& dest
+  , array3d<T, layout_ikj> const& src
+    ) noexcept
+{ // {{{
+    auto const nx = src.nx();
+    auto const nz = src.nz();
+
+    TSB_ASSUME(0 == (nx % 16)); 
+
+    TSB_ASSUME(dest.nx() == src.nx());
+    TSB_ASSUME(dest.ny() == src.ny());
+    TSB_ASSUME(dest.nz() == src.nz());
+
+    for (auto j = j_begin; j < j_end; ++j)
+        for (auto k = 0; k < nz; ++k)
+        {
+            T* __restrict__       destp = dest(_, j, k);
+            T const* __restrict__ srcp  = src (_, j, k);
+
+            TSB_ASSUME_ALIGNED(destp, 64);
+            TSB_ASSUME_ALIGNED(srcp,  64);
+
+            #pragma simd
+            for (auto i = 0; i < nx; ++i)
+                destp[i] = srcp[i];
+        }
+} // }}}
+
 } // tsb
 
 #endif // TSB_E343F9D4_3FF8_4928_8F22_A6720FC1BD34
