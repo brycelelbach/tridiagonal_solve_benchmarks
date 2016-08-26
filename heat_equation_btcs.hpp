@@ -841,7 +841,7 @@ struct heat_equation_btcs_mkl_z_contiguous_rolling_matrix
 
             using namespace tsb::mkl;
 
-            solve(
+            solve_tile(
                 0, this->tw, j_begin, j_end
               , this->A.a(tn), this->A.b(tn), this->A.c(tn), this->u
             );
