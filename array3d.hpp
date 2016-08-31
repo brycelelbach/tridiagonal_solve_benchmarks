@@ -12,6 +12,8 @@
 
 #include "make_aligned_array.hpp"
 
+#warning span() seems wrong, should be (*this)(nx_ - 1, ny_ - 1, nz_ - 1) + 1 (although I don't think this covers padding)
+
 namespace tsb
 {
 
@@ -185,7 +187,6 @@ struct layout_right
 
     constexpr size_type span() const noexcept
     {
-        #warning This seems wrong, should be (*this)(nx_, ny_, nz_) - (*this)(0, 0, 0)
         return (nx_ * ny_ * nz_)
              + stride_x() * px_  
              + stride_y() * py_ 
