@@ -185,6 +185,7 @@ struct layout_right
 
     constexpr size_type span() const noexcept
     {
+        #warning This seems wrong, should be (*this)(nx_, ny_, nz_) - (*this)(0, 0, 0)
         return (nx_ * ny_ * nz_)
              + stride_x() * px_  
              + stride_y() * py_ 
