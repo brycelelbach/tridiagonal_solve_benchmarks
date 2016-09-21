@@ -42,6 +42,22 @@ namespace tsb
 template <typename T>
 struct solver_traits;
 
+// Solves a one-dimensional diffusion equation using the implicit Backward Time,
+// Centered Space (BTCS) finite difference method. The following problem is
+// solve:
+//
+//     u_t = D * u_zz, z in (0, 1)
+//
+//     u(z, 0) = sin(N * pi * z)
+//     u(0, t) = u(1, t) = 0
+// 
+// This problem has an exact solution:
+//
+//     u(z, t) = e ^ (-D * N^2 * pi^2 * t) * sin(N * pi * z)
+//
+// From I Do Like CFD, Vol 1, Equation 7.2.1
+// http://hplgit.github.io/num-methods-for-PDEs/doc/pub/diffu/sphinx/._main_diffu001.html
+
 template <typename Derived>
 struct heat_equation_btcs : enable_fp_exceptions
 {
