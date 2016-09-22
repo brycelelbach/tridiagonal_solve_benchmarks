@@ -204,6 +204,7 @@ struct aligned_array_ptr
         std::swap(size_,        other.size_);
         std::swap(true_ptr_,    other.true_ptr_);
         std::swap(aligned_ptr_, other.aligned_ptr_);
+        return *this;
     }
 
     reference operator[](size_type i) const noexcept
