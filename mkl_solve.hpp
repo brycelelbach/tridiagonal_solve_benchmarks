@@ -131,7 +131,7 @@ inline void gtsv<float>(
   , float* __restrict__ c // Upper band.
   , float* __restrict__ u // RHS.
   , MKL_INT const ldb     // Leading dimension of the RHS.
-    )
+    ) noexcept
 {
     MKL_INT info = 0;
 
@@ -149,7 +149,7 @@ inline void gtsv<double>(
   , double* __restrict__ c // Upper band.
   , double* __restrict__ u // RHS.
   , MKL_INT const ldb      // Leading dimension of the RHS.
-    )
+    ) noexcept
 {
     MKL_INT info = 0;
 
