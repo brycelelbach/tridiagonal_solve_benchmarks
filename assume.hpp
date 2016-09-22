@@ -13,6 +13,40 @@
 
 #include "always_inline.hpp"
 
+#if defined(__INTEL_COMPILER)
+    #define TSB_BUILTIN_ASSUME(expr)           __assume(expr)
+    #define TSB_BUILTIN_ASSUME_ALIGNED(p, agn) __assume_aligned(p, agn)
+#else
+    #define TSB_BUILTIN_ASSUME(expr)           __builtin_assume(expr)
+    #define TSB_BUILTIN_ASSUME_ALIGNED(p, agn) __builtin_assume_aligned(p, agn)
+#endif
+ 
+#if defined(NDEBUG)
+    #define TSB_ASSUME(expr)                                                   \
+        {                                                                      \
+            TSB_BUILTIN_ASSUME(expr);                                          \
+        }                                                                      \
+        /**/
+    #define TSB_ASSUME_ALIGNED(p, agn)                                         \
+        {                                                                      \
+            TSB_BUILTIN_ASSUME_ALIGNED(p, agn);                                \
+        }                                                                      \
+        /**/
+#else
+    #define TSB_ASSUME(expr)                                                   \
+        {                                                                      \
+            assert(expr);                                                      \
+            TSB_BUILTIN_ASSUME(expr);                                          \
+        }                                                                      \
+        /**/
+    #define TSB_ASSUME_ALIGNED(p, agn)                                         \
+        {                                                                      \
+            assert(0 == (std::uintptr_t(p) % agn));                            \
+            TSB_BUILTIN_ASSUME_ALIGNED(p, agn);                                \
+        }                                                                      \
+        /**/
+#endif
+
 namespace tsb
 {
 
@@ -27,65 +61,43 @@ void assume_aligned_to_type(T* ptr) noexcept TSB_ALWAYS_INLINE;
     template <typename T>
     void assume_aligned_to_type(T* ptr) noexcept
     {
-        __assume_aligned(ptr, sizeof(T));
+        TSB_BUILTIN_ASSUME_ALIGNED(ptr, sizeof(T));
     }
 #else
     template <>
     void assume_aligned_to_type(float* ptr) noexcept
     {
-        __assume_aligned(ptr, sizeof(float));
+        TSB_BUILTIN_ASSUME_ALIGNED(ptr, sizeof(float));
     }
 
     template <>
     void assume_aligned_to_type(double* ptr) noexcept
     {
-        __assume_aligned(ptr, sizeof(double));
+        TSB_BUILTIN_ASSUME_ALIGNED(ptr, sizeof(double));
     }
 
     template <>
     void assume_aligned_to_type(float const* ptr) noexcept
     {
-        __assume_aligned(ptr, sizeof(float));
+        TSB_BUILTIN_ASSUME_ALIGNED(ptr, sizeof(float));
     }
 
     template <>
     void assume_aligned_to_type(double const* ptr) noexcept
     {
-        __assume_aligned(ptr, sizeof(double));
+        TSB_BUILTIN_ASSUME_ALIGNED(ptr, sizeof(double));
     }
 #endif
 
 } // tsb
 
 #if defined(NDEBUG)
-    #define TSB_ASSUME(expr)                                                    \
-        {                                                                       \
-            __assume(expr);                                                     \
-        }                                                                       \
-        /**/
-    #define TSB_ASSUME_ALIGNED(p, alignment)                                    \
-        {                                                                       \
-            __assume_aligned(p, alignment);                                     \
-        }                                                                       \
-        /**/
     #define TSB_ASSUME_ALIGNED_TO_TYPE(p)                                       \
         {                                                                       \
             ::tsb::assume_aligned_to_type(p);                                   \
         }                                                                       \
         /**/
 #else
-    #define TSB_ASSUME(expr)                                                    \
-        {                                                                       \
-            assert(expr);                                                       \
-            __assume(expr);                                                     \
-        }                                                                       \
-        /**/
-    #define TSB_ASSUME_ALIGNED(p, alignment)                                    \
-        {                                                                       \
-            assert(0 == (std::uintptr_t(p) % alignment));                       \
-            __assume_aligned(p, alignment);                                     \
-        }                                                                       \
-        /**/
     #define TSB_ASSUME_ALIGNED_TO_TYPE(p)                                       \
         {                                                                       \
             assert(0 == (std::uintptr_t(p) % sizeof(decltype(*p))));            \
