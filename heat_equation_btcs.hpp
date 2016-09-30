@@ -194,6 +194,8 @@ struct heat_equation_btcs : enable_fp_exceptions
 
     void run() noexcept
     {
+        __SSC_MARK(0x220);
+
         allocate_arrays();
 
         derived().initialize();
@@ -202,6 +204,8 @@ struct heat_equation_btcs : enable_fp_exceptions
             tw, u
           , [=] (size_type k) noexcept { return initial_conditions(k); }
         );
+
+        __SSC_MARK(0x221);
 
         timer t;
 
@@ -214,7 +218,11 @@ struct heat_equation_btcs : enable_fp_exceptions
 
             timer st;
 
+            __SSC_MARK(0x44332211);
+
             derived().step(s);
+
+            __SSC_MARK(0x55332211);
 
             solvertime += st.elapsed();
 
