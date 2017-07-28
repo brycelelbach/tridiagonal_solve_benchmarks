@@ -16,12 +16,12 @@ MKLFLAGS+=-mkl=sequential
 
 ifeq ($(NERSC_HOST),cori)
   ifeq ($(ARCH),)
-	ARCH=AVX2
+    ARCH=AVX2
   endif
 endif
 ifeq ($(NERSC_HOST),edison)
   ifeq ($(ARCH),)
-	ARCH=AVX
+    ARCH=AVX
   endif
 endif
 
