@@ -45,8 +45,8 @@ ifeq ($(DEBUG),1)     # DEBUG == 1
   CXXFLAGS+=-O0 -ggdb
   ifeq ($(STATIC),1)
     $(error Debug builds must be dynamic.)
-  endif               # DEBUG == 0
-else
+  endif
+else                  # DEBUG == 0
   BUILD_TYPE:=$(BUILD_TYPE).RELEASE
   CXXFLAGS+=-O3 -ipo -no-prec-div -fp-model fast=2
 endif
